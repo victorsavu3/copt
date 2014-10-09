@@ -1,12 +1,18 @@
-open Printf 
-open Simc_lex
+open Prelude
 
-let parse buf : Simc.decl list =
-  Simc_pars.decls Simc_lex.ctok buf
+let parse = Simc_pars.decls Simc_lex.ctok % Lexing.from_channel
 
-let main () =
-  let lexbuf = Lexing.from_channel stdin in
-  printf "%s\n" (Simc.declsToString (parse lexbuf))
+open Cfg
+open Transform
+(*open Domain*)
 
-let _ = Printexc.print main () 
-
+let _ =
+  let cin = if Array.length Sys.argv > 1 then open_in Sys.argv.(1) else stdin in
+  let ast = parse cin in
+  let cfg = from_decls ast in
+  (* uncomment to pretty print the parsed input *)
+  (*print_endline @@ Simc.declsToString ast; *)
+  (* uncomment to print a dot graph of the CFG before the transformation *)
+  (*print_endline @@ pretty_cfg cfg; *)
+  let cfg = transform (module Memorization) cfg in
+  print_endline @@ pretty_cfg cfg

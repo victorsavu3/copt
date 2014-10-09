@@ -1,7 +1,7 @@
-cmac
+copt
 ====
 
-Parser for CMA C.
+Program optimizer for CMA C.
 
 Biggest simplifications:
  * only int constants, fewer operators
@@ -9,28 +9,14 @@ Biggest simplifications:
  * no function pointer type --- difficult to parse, also we don't care
  * no semicolon after "struct n {...}"
 
-Syntax
-------
+Build
+-----
 
-id  -- identifier
-num -- value
+Install [opam](https://opam.ocaml.org/doc/Install.html), then do
 
-binop ::= '+' | '-' | '*' | '/' | '<' | '<=' | '==' | '>' | '>=' | '!=' | "="
+       git clone https://github.com/vogler/copt.git
+       cd copt
+       make setup
+       make
 
-lval ::= id | '*' e_ | lval.id | lval[e]
-
-e_ ::= num | '&' lval | lval | e_'('e, ..., e')' | '(' e ')'
-
-e ::= e_ | e binop e_
-
-typ ::= int | sturct id | typ *
-
-decl ::= struct id { typ id; ... typ id; }
-       | typ id ;
-       | typ id(typ id, ..., typ id) { stmt* }
-
-stmt ::= typ id; | e; | continue; | break; | return e; | return; | goto id; | id:
-       | if e then stmt else stmt | while (e) stmt | for (e;e;e) stmt |
-       | do stmt while (e) | switch (e) { switch_stmt* }
-
-switch_stmt ::= case num: | default: | stmt
+Menhir is optional, you can use `make yacc` to compile using ocamllex/ocamlyacc instead.
