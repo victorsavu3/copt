@@ -17,6 +17,7 @@ open Simc
 %type <Simc.stmt>       stmt
 %type <Simc.decl list>  decls
 
+%right THEN ELSE
 %nonassoc LOW AMP DEF
 %nonassoc LEQ LE GEQ GR EQ NEQ
 %left ADD SUB
@@ -25,67 +26,70 @@ open Simc
 
 %%
 
-lval: ID                   { Var $1 }
-    | MUL s_exp            { Deref $2 }
-    | lval DOT ID          { Field ($1,$3) }
-    | lval LBRAC exp RBRAC { Index ($1,$3) }
+lval: ID                    { Var $1 }
+    | MUL s_exp             { Deref $2 }
+    | lval DOT ID           { Field ($1,$3) }
+    | lval LBRAC exp RBRAC  { Index ($1,$3) }
     ;
 
 f_args_:                    { [] }
        | COMMA exp f_args_  { $2::$3 }
        ;
 
-f_args:               { [] }
-      | exp f_args_   { $1::$2 }
+f_args:              { [] }
+      | exp f_args_  { $1::$2 }
       ;
 
-s_exp: VAL                    { Val $1 }
-     | AMP lval               { Addr $2 }
-     | lval     %prec LOW     { Lval $1 }
-     | s_exp LPAR f_args RPAR { App ($1,$3) }
-     | LPAR exp RPAR          { $2 }
+ints:            { [] }
+    | VAL ints_  { $1::$2 }
+    ;
+ints_:                  { [] }
+     | COMMA VAL ints_  { $2::$3 }
      ;
 
-exp: s_exp            { $1 }
-   | exp ADD exp      { Binop ($1,Add,$3) }
-   | exp SUB exp      { Binop ($1,Sub,$3) }
-   | exp MUL exp      { Binop ($1,Mul,$3) }
-   | exp DIV exp      { Binop ($1,Div,$3) }
-   | exp LEQ exp      { Binop ($1,Leq,$3) }
-   | exp LE  exp      { Binop ($1,Le ,$3) }
-   | exp GEQ exp      { Binop ($1,Geq,$3) }
-   | exp GR  exp      { Binop ($1,Gr ,$3) }
-   | exp EQ  exp      { Binop ($1,Eq ,$3) }
-   | exp NEQ exp      { Binop ($1,Neq,$3) }
-   | exp DEF exp      { Binop ($1,Asn,$3) }
+s_exp: VAL                     { Val $1 }
+     | AMP lval                { Addr $2 }
+     | lval     %prec LOW      { Lval $1 }
+     | s_exp LPAR f_args RPAR  { App ($1,$3) }
+     | LPAR exp RPAR           { $2 }
+     ;
+
+exp: s_exp        { $1 }
+   | exp ADD exp  { Binop ($1,Add,$3) }
+   | exp SUB exp  { Binop ($1,Sub,$3) }
+   | exp MUL exp  { Binop ($1,Mul,$3) }
+   | exp DIV exp  { Binop ($1,Div,$3) }
+   | exp LEQ exp  { Binop ($1,Leq,$3) }
+   | exp LE  exp  { Binop ($1,Le ,$3) }
+   | exp GEQ exp  { Binop ($1,Geq,$3) }
+   | exp GR  exp  { Binop ($1,Gr ,$3) }
+   | exp EQ  exp  { Binop ($1,Eq ,$3) }
+   | exp NEQ exp  { Binop ($1,Neq,$3) }
+   | exp DEF exp  { Binop ($1,Asn,$3) }
    ;
 
-typ: INT              { Int }
-    | VOID            { Void }
-    | STRUCT ID       { Struct $2 }
-    | typ MUL         { Ptr $1 }
-    ;
+typ: INT        { Int }
+   | VOID       { Void }
+   | STRUCT ID  { Struct $2 }
+   | typ MUL    { Ptr $1 }
+   ;
 
-vdecl: typ ID         { ($1,$2) }
-   | typ ID LBRAC RBRAC { Arr $1, $2 }
-;
+init: exp              { $1 }
+   | LCURL ints RCURL  { ArrInit $2 }
+   ;
 
-vdecls:                        { [] }
-      | vdecl SCOLON vdecls    { $1::$3 }
-      ;
-
-ints:              { [] }
-    | VAL ints_    { $1::$2 }
-    ;
-ints_:                    {[]}
-     | COMMA VAL ints_    { $2::$3 }
+vdecl: typ ID              { ($1,$2) }
+     | typ ID LBRAC RBRAC  { Arr $1, $2 }
      ;
 
-decl: STRUCT ID LCURL vdecls RCURL                 { StructDecl ($2,$4) }
-    | vdecl SCOLON                                 { Global (fst $1, snd $1, None) }
-    | vdecl DEF exp SCOLON                         { Global (fst $1, snd $1, Some (ExprInit $3)) }
-    | vdecl DEF LCURL ints RCURL SCOLON            { Global (fst $1, snd $1, Some (ArrInit $4)) }
-    | typ ID LPAR args RPAR LCURL stmts RCURL      { Function ($1,$2,$4,$7) }
+vdecls:                      { [] }
+      | vdecl SCOLON vdecls  { $1::$3 }
+      ;
+
+decl: STRUCT ID LCURL vdecls RCURL             { StructDecl ($2,$4) }
+    | vdecl SCOLON                             { Global (fst $1, snd $1, None) }
+    | vdecl DEF init SCOLON                    { Global (fst $1, snd $1, Some $3) }
+    | typ ID LPAR args RPAR LCURL stmts RCURL  { Function ($1,$2,$4,$7) }
     ;
 
 args:              { [] }
@@ -96,16 +100,15 @@ args_:                    {[]}
      | COMMA vdecl args_  { $2::$3 }
      ;
 
-decls:            { [] }
-     | decl decls { $1::$2 }
-     | EOF        { [] }
+decls: decl decls  { $1::$2 }
+     | EOF         { [] }
      ;
 
 stmt: exp SCOLON                                    { Expr $1 }
     | vdecl SCOLON                                  { Local (fst $1,snd $1,None) }
-    | vdecl DEF exp SCOLON                          { Local (fst $1,snd $1,Some $3) }
+    | vdecl DEF init SCOLON                         { Local (fst $1,snd $1,Some $3) }
+    | IF LPAR exp RPAR stmt    %prec THEN           { IfThenElse ($3,$5,Block []) }
     | IF LPAR exp RPAR stmt ELSE stmt               { IfThenElse ($3,$5,$7) }
-    | IF LPAR exp RPAR stmt                         { IfThenElse ($3,$5,Block []) }
     | FOR LPAR exp SCOLON exp SCOLON exp RPAR stmt  { For ($3,$5,$7,$9) }
     | WHILE LPAR exp RPAR stmt                      { While ($3,$5) }
     | DO stmt WHILE LPAR exp RPAR SCOLON            { DoWhile ($2,$5) }
@@ -119,8 +122,8 @@ stmt: exp SCOLON                                    { Expr $1 }
     | LCURL stmts RCURL                             { Block $2 }
     ;
 
-stmts:            { [] }
-     | stmt stmts { $1::$2 }
+stmts:             { [] }
+     | stmt stmts  { $1::$2 }
      ;
 
 sstmt: CASE VAL COLON  { Case $2 }
@@ -131,4 +134,3 @@ sstmt: CASE VAL COLON  { Case $2 }
 sstmts:               { [] }
       | sstmt sstmts  { $1::$2 }
       ;
-

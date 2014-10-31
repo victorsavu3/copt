@@ -8,13 +8,16 @@ end
 
 let transform (module M : S) = ExtSet.flat_map (Set.of_list % M.transform)
 
-module Memorization : S = struct (* applicative functor *)
+module Memorization = struct (* applicative functor *)
   let memo_registers : (expr,reg) Hashtbl.t = Hashtbl.create 16
 
   let t_expr expr =
-    match Hashtbl.find_option memo_registers expr with
-    | Some r -> r
-    | None -> (let r = nr () ^ "_memo" in Hashtbl.add memo_registers expr r; r)
+    Hashtbl.find_default memo_registers expr
+      (let r = nr () ^ "_memo" in
+      Hashtbl.add memo_registers expr r;
+      r)
+
+  let is_memo = Hashtbl.values memo_registers |> List.of_enum |> flip List.mem
 
   let transform = function
     | (u, Pos e, v) ->
@@ -46,4 +49,13 @@ module Memorization : S = struct (* applicative functor *)
         v1, Assign (te2, e2), v2;
         v2, Store (var te1, var te2), v]
     | (u, Skip, v) -> [u, Skip, v]
+    | (u, Call (r,n,args), v) as edge -> [edge] (* registers are already introduced in cfg *)
+end
+
+
+module RedElim (C: Cfg) : S = struct
+  module Ana = Analyses.AvailExpr (C) (Memorization)
+
+  let transform = function
+    | _ -> ?? "Exercise 3.2c"
 end

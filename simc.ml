@@ -9,6 +9,7 @@ type lval =
   | Index of lval * expr
 and expr =
   | Val   of int
+  | ArrInit of int list
   | Lval  of lval
   | Addr  of lval
   | Binop of expr * binop * expr
@@ -39,14 +40,23 @@ and switch_stmt =
   | Case            of int
   | NormalStatement of stmt
 
-type init = ExprInit of expr | ArrInit of int list
 type decl =
   | StructDecl of string * (typ * string) list
-  | Global     of typ * string * init option
+  | Global     of typ * string * expr option
   | Function   of typ * string * (typ * string) list * stmt list
 
 
 (* helper functions *)
+let rec reg_in_expr reg = function
+  | Binop (e1,op,e2) -> reg_in_expr reg e1 || reg_in_expr reg e2
+  | App (f, args) -> reg_in_expr reg f || List.exists (reg_in_expr reg) args
+  | Lval lval | Addr lval -> reg_in_lval reg lval
+  | Val _ | ArrInit _ -> false
+and reg_in_lval reg = function
+  | Var name -> reg=name
+  | Deref e -> reg_in_expr reg e
+  | Field (b, name) -> reg_in_lval reg b
+  | Index (b, i) -> reg_in_lval reg b || reg_in_expr reg i
 
 let binopToString = function
   | Add -> "+"
@@ -76,6 +86,7 @@ let rec lvalToString = function
 
 and exprToString = function
   | Val x         -> string_of_int x
+  | ArrInit xs    -> "{"^String.concat ", " (List.map string_of_int xs)^"}"
   | Lval x        -> lvalToString x
   | Addr x        -> lvalToString x
   | Binop (x,o,y) -> exprToString x^" "^binopToString o^" "^exprToString y
@@ -126,8 +137,7 @@ let rec argToString = function
 let declToString = function
   | StructDecl (n,xs) -> "struct "^n^" {"^defsToString xs^"}\n"
   | Global  (t,n,None)  ->  typToString t^" "^n^";\n"
-  | Global  (t,n,Some(ExprInit e))  ->  typToString t^" "^n^" = "^exprToString e^";\n"
-  | Global  (t,n,Some(ArrInit xs))  ->  typToString t^" "^n^" = {"^String.concat ", " (List.map string_of_int xs)^"};\n"
+  | Global  (t,n,Some e)  ->  typToString t^" "^n^" = "^exprToString e^";\n"
   | Function (r,n,args,xs) -> typToString r^" "^n^"("^argToString args^") {\n"^String.concat "\n" (istmtsToString xs)^"\n}\n"
 
 let rec declsToString = function

@@ -5,14 +5,15 @@ open Printf
 type node = int
 type reg = string
 (* type var = Reg of string | Mem of int *)
-type action = Pos of expr | Neg of expr | Assign of reg * expr (* R := e *) | Load of reg * expr (* R = M[e]*) | Store of expr * expr (* M[e1] := e2*) | Skip
+type action = Pos of expr | Neg of expr | Assign of reg * expr (* R := e *) | Load of reg * expr (* R = M[e]*) | Store of expr * expr (* M[e1] := e2*) | Skip | Call of reg option * string * expr list
 type edge = node * action * node
 type cfg = edge Set.t
+module type Cfg = sig val cfg: cfg end
 
 let node = ref 0
-let nn () = incr node; !node (* gets a fresh node *)
+let nn () = Ref.post_incr node (* gets a fresh node *)
 let reg = ref 0
-let nr () = incr reg; "__R" ^ string_of_int (!reg) (* gets a fresh register *)
+let nr () = "$R" ^ string_of_int (Ref.post_incr reg) (* gets a fresh register *)
 
 (* error processing the cfg *)
 exception Cfg of string
@@ -20,9 +21,9 @@ exception Cfg of string
 (*expr_need_split : expr -> bool*)
 let rec expr_need_split = function
   | Lval (Deref _) | Lval (Index _) -> true
-  | Lval (Var _) | Val _ -> false
+  | Lval (Var _) | Val _ | ArrInit _ -> false
   | Binop (e1,op,e2) -> op = Asn || expr_need_split e1 || expr_need_split e2
-  | Lval (Field _) | Addr _ | App _ -> raise Not_implemented
+  | Lval (Field _) | Addr _ | App _ -> true
 
 let var reg = Lval (Var reg)
 
@@ -37,7 +38,14 @@ let rec from_lval (u,edges) = function
   | Deref expr ->
       let v,edges,r = from_expr (u,edges) expr in
       v, edges, LOC_addr r
-  | Field _ -> raise Not_implemented
+  | Field (lval,field) ->
+      let v,edges,ra = from_lval (u,edges) lval in
+      let ra = match ra with LOC_var r -> Lval (Var r) | LOC_addr r -> r in
+      let dv = nn () in let dr = nr () in
+      let offs = raise Not_implemented in (* we need some environment to keep the fields and their size *)
+      let ld_expr = Binop (ra, Add, offs) in
+      let edges = Set.add (v,Assign (dr,ld_expr),dv) edges in
+      dv,edges,LOC_addr (Lval (Var dr))
   | Index (lval,expr) ->
       let v,edges,ra = from_lval (u,edges) lval in
       let w,edges,ri = from_expr (v,edges) expr in
@@ -79,6 +87,17 @@ and from_expr (u,edges) : expr -> node * cfg * expr = function
       let ld_expr = Binop (r1, op, r2) in
       let edges = Set.add (w,Assign (dr,ld_expr),dv) edges in
       dv,edges,var dr
+  | App (f, args) ->
+      let v,edges,fp = from_expr (u,edges) f in
+      let fname = match fp with
+        | Lval (Var fname) -> fname
+        | _ -> raise @@ Cfg "Could not compute function expression"
+      in
+      let w,edges,ld_args = List.fold_left (fun (an,aes,rs) e -> let n,es,r = from_expr (an,aes) e in n,es,(r::rs)) (v,edges,[]) args in
+      let x = nn () in
+      let ret = nr () in (* this register will keep the return value *)
+      let edges = Set.add (w, Call (Some ret, fname, ld_args), x) edges in
+      x,edges,var ret
   | _ -> raise Not_implemented
 
 type context = { continue: node option; break: node option; return: node }
@@ -128,31 +147,53 @@ let rec from_stmt ctx (u,edges) stmt =
       let tv,edges = from_stmt {ctx with continue = Some u; break = Some fn} (tn,edges) s in
       let edges = Set.union (Set.of_list [bv, Pos(r), tn; bv, Neg(r), fn; tv, Skip, u]) edges in
       fn,edges
-  | DoWhile (s,b) -> raise Not_implemented
+  | DoWhile (s,b) ->
+      let fn = nn () in
+      let tv,edges = from_stmt {ctx with continue = Some u; break = Some fn} (u,edges) s in
+      let bv,edges,r = from_expr (tv,edges) b in
+      let edges = Set.union (Set.of_list [bv, Pos(r), u; bv, Neg(r), fn]) edges in
+      fn,edges
   | Label l -> raise Not_implemented
   | Goto l -> raise Not_implemented
   | Switch (b, ss) -> raise Not_implemented
-  | Local (t,x,Some expr) -> raise Not_implemented
+  | Local (t,x,Some expr) ->
+      let v,edges,r = from_expr (u,edges) expr in
+      let w = nn () in
+      let edges = Set.add (v, Assign (x, r), w) edges in
+      w,edges
   | Local (t,x,None) -> (u,edges)
   | Block ss -> from_stmts ctx (u,edges) ss
 and from_stmts ctx (u,edges) = List.fold_left (from_stmt ctx) (u,edges)
 
+(*cfg for one declaration*)
+let from_decl (u,edges) = function
+  | StructDecl(name, decls) -> raise Not_implemented
+  | Global (t, name, Some expr) ->
+      let v,edges,r = from_expr (u,edges) expr in
+      let w = nn () in
+      let edges = Set.add (v, Assign (name, r), w) edges in
+      w,edges
+  | Function (r,name,args,stmts) ->
+      let u = nn () in
+      let v = nn () in
+      let ctx = { continue = None; break = None; return = v} in
+      let v2,edges = from_stmts ctx (u, edges) stmts in
+      let edges = Set.add (v2, Skip, v) edges in
+      v,edges
+  | _ -> u,edges (* nothing to do if there is just a declaration without init *)
+
 (*cfg for the whole program*)
 let from_decls decls =
-  let xs = List.filter_map (function
-    | Function(r,"main",args,stmts) ->
-        let u = nn () in
-        let v = nn () in
-        let ctx = { continue = None; break = None; return = v} in
-        let v2,xs = from_stmts ctx (u,Set.empty) stmts in
-        let xs = Set.add (v2,Skip,v) xs in Some xs
-    | _ -> None
-    ) decls
-  in
-  if List.length xs <> 1 then
-    raise @@ Cfg "There must be exactly one function called main"
-  else
-    List.hd xs
+  let funs, globs = List.partition (function Function _ -> true | _ -> false) decls in
+  let mainfuns = List.filter (function Function(_,"main",_,_) -> true | _ -> false) funs in
+  if List.length mainfuns <> 1 then raise @@ Cfg "There must be exactly one function called main" else
+  let u = nn () in (* start node of the whole CFG *)
+  let v = nn () in (* end node of the whole CFG *)
+  let w,edges = List.fold_left from_decl (u,Set.empty) globs in (* initialize globals *)
+  let edges = Set.add (w, Call (None, "main", []), v) edges in (* implicit call to main *)
+  let x,edges = List.fold_left from_decl (w,edges) funs in (* function bodies *)
+  edges
+
 
 (* pretty printing of cfg *)
 let pretty_action = function
@@ -162,12 +203,20 @@ let pretty_action = function
   | Load (v,e) -> sprintf "%s := M[%s]" v @@ exprToString e
   | Store (e1,e2) -> sprintf "M[%s] := %s" (exprToString e1) (exprToString e2)
   | Skip -> "Skip"
+  | Call (ret, name, args) -> sprintf "Call %s %s(%s)" (ret |? "_") name (String.concat ", " @@ List.map exprToString args)
 
 let pretty_edge (u,l,v) =
-  sprintf "%d -> %d [label=\"%s\"] \n" u v (pretty_action l)
+  sprintf "\t%d -> %d [label=\"%s\"]\n" u v (pretty_action l)
 
 let pretty_cfg cfg =
   let edges = String.concat "" (List.map pretty_edge (Set.to_list cfg)) in
-  sprintf "digraph {
-    %s
-  }" edges
+  sprintf "digraph {\n%s}" edges
+
+(* collect all expressions *)
+let expr_of_action = function
+  | Pos e | Neg e | Assign (_,e) | Load (_,e) -> Set.singleton e
+  | Store (e1,e2) -> Set.union (Set.singleton e1) (Set.singleton e2)
+  | Call (r,n,args) -> List.fold_left (flip Set.add) Set.empty args
+  | Skip -> Set.empty
+
+let expr_of_cfg : cfg -> expr Set.t = fun cfg -> Set.fold (fun (u,a,v) -> Set.union (expr_of_action a)) cfg Set.empty

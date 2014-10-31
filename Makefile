@@ -1,4 +1,6 @@
 TARGET = main.native
+
+# put this in your environment to enable stacktraces:
 #export OCAMLRUNPARAM='b'
 
 all:
@@ -7,10 +9,14 @@ all:
 yacc:
 	ocamlbuild -use-ocamlfind $(TARGET)
 
+test:
+	bash -c tests/all.sh
+
 clean:
 	ocamlbuild -clean
 
 setup:
+	opam init
 	opam update
 	opam switch 4.02.1
 	eval `opam config env`
