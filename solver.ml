@@ -18,7 +18,23 @@ module ConstraintSystem (D: Domain.Lattice) = struct
 
   module RoundRobin : Solver = struct
     let solve : csys -> valuation = fun csys ->
-      ?? "Exercise 3.2a"
+      (*?? "Exercise 3.2a"*)
+      let round vals =
+        List.fold_right (fun (lhs,fi) (vals, fin) ->
+          let lhs_val = val_of vals lhs in
+          let rhs_val = fi (val_of vals) in
+          let new_val = D.join lhs_val rhs_val in
+          if D.leq new_val lhs_val then
+            vals, fin (* value not changed *)
+          else
+            Map.add lhs new_val vals, false
+        ) csys (vals, true)
+      in
+      let rec iterate vals =
+        let vals, fin = round vals in
+        if fin then vals else iterate vals
+      in
+      val_of @@ iterate Map.empty
   end
 end
 

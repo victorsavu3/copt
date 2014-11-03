@@ -10,7 +10,13 @@ module AvailExpr (C: Cfg) (Memo: sig val is_memo: reg -> bool end) = struct
 
     (* we assume this is done after the memorization transformation *)
     let effect a d = match a with
-      | _ -> ?? "Exercise 3.2b"
+      (*| _ -> ?? "Exercise 3.2b"*)
+      | Assign (r, e) when Memo.is_memo r ->
+          D.add e d |> D.filter (neg @@ Simc.reg_in_expr r)
+      | Assign (r, e)
+      | Load (r, e) ->
+          D.filter (neg @@ Simc.reg_in_expr r) d
+      | _ -> d
   end
 
   module Csys = CsysGenerator (Ana)
