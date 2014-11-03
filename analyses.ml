@@ -6,6 +6,7 @@ module AvailExpr (C: Cfg) (Memo: sig val is_memo: reg -> bool end) = struct
   module Ana = struct
     let dir = `Fwd
     module D = Domain.ExprSupSet (C)
+    let init = D.empty
 
     (* we assume this is done after the memorization transformation *)
     let effect a d = match a with

@@ -219,4 +219,7 @@ let expr_of_action = function
   | Call (r,n,args) -> List.fold_left (flip Set.add) Set.empty args
   | Skip -> Set.empty
 
-let expr_of_cfg : cfg -> expr Set.t = fun cfg -> Set.fold (fun (u,a,v) -> Set.union (expr_of_action a)) cfg Set.empty
+let expr_of_cfg : cfg -> expr Set.t = ExtSet.flat_map (fun (u,a,v) -> expr_of_action a)
+
+let start_nodes cfg = Set.diff (Set.map Tuple3.first cfg) (Set.map Tuple3.third cfg)
+let end_nodes cfg = Set.diff (Set.map Tuple3.third cfg) (Set.map Tuple3.first cfg)
