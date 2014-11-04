@@ -17,7 +17,7 @@ module Memorization = struct (* applicative functor *)
       Hashtbl.add memo_registers expr r;
       r)
 
-  let is_memo = Hashtbl.values memo_registers |> List.of_enum |> flip List.mem
+  let is_memo reg = Hashtbl.values memo_registers |> List.of_enum |> List.mem reg
 
   let transform = function
     | (u, Pos e, v) ->
