@@ -18,18 +18,15 @@ module ConstraintSystem (D: Domain.Lattice) = struct
 
   module RoundRobin : Solver = struct
     let solve : csys -> valuation = fun csys ->
-      let rec solver sys vals = function
-        let magic = fun con -> (fst con ((snd con) vals)) in
-        let nvals = map sys magic in
-        let funk x = function
-          snd (head (filter nvals (fun y -> x == y)))
-        in
+      let rec solver sys vals = 
+        let magic con = (fst con ((snd con) vals)) in
+        let nvals = map magic sys in
+        let funk x = snd (Option.get (get (filter (fun y -> x == y) nvals))) in
           if nvals == vals then
-          	vals
+          	funk
           else
-          	solver csys nvals
+          	solver csys funk
        in solver csys (fun _ -> D.bot)
-      ?? "Exercise 3.2a"
   end
 end
 
