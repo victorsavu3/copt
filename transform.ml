@@ -57,5 +57,6 @@ module RedElim (C: Cfg) : S = struct
   module Ana = Analyses.AvailExpr (C) (Memorization)
 
   let transform = function
-    | _ -> ?? "Exercise 3.2c"
+    | (u, Assign (r, e), v) -> if Ana.available_at e u then [u, Skip, v] else [u, Assign (r, e), v]
+    | (u, a, v) -> [u, a, v]
 end
