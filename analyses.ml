@@ -12,7 +12,7 @@ module AvailExpr (C: Cfg) (Memo: sig val is_memo: reg -> bool end) = struct
     let effect a d = match a with
       | Pos e -> d
       | Neg e -> d
-      | Assign (r, e) -> let res = (if Memo.is_memo r then (D.join d (D.singleton e)) else d) in D.diff res (D.filter (fun ex -> Simc.reg_in_expr r ex) res)
+      | Assign (r, e) -> let res = (if Memo.is_memo r then (D.add e d) else d) in (D.filter (fun ex -> Simc.reg_in_expr r ex) res)
       | Load (r, e) -> D.filter (fun ex -> Simc.reg_in_expr r ex) d
       | Store (e1, e2) -> d
       | Skip -> d
