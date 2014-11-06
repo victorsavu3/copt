@@ -12,10 +12,12 @@ module Memorization = struct (* applicative functor *)
   let memo_registers : (expr,reg) Hashtbl.t = Hashtbl.create 16
 
   let t_expr expr =
-    Hashtbl.find_default memo_registers expr
-      (let r = nr () ^ "_memo" in
+    match Hashtbl.find memo_registers expr with
+    | Some r -> r
+    | None ->
+      let r = nr () ^ "_memo" in
       Hashtbl.add memo_registers expr r;
-      r)
+      r
 
   let is_memo reg = Hashtbl.values memo_registers |> List.of_enum |> List.mem reg
 
