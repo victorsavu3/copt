@@ -3,10 +3,10 @@ open Simc
 open Cfg
 
 module type S = sig
-  val transform: edge -> edge list
+  val transform: cfg -> cfg
 end
 
-let transform (module M : S) = ExtSet.flat_map (Set.of_list % M.transform)
+let map (f : edge -> edge list) = ExtSet.flat_map (Set.of_list % f)
 
 module Memorization = struct (* applicative functor *)
   let memo_registers : (expr,reg) Hashtbl.t = Hashtbl.create 16
@@ -21,7 +21,8 @@ module Memorization = struct (* applicative functor *)
 
   let is_memo reg = Hashtbl.values memo_registers |> List.of_enum |> List.mem reg
 
-  let transform = function
+  let transform = map @@ function
+    (*| _ -> ?? "Exercise 2.3"*)
     | (u, Pos e, v) ->
         let v1 = nn () in
         let te = t_expr e in
@@ -54,12 +55,30 @@ module Memorization = struct (* applicative functor *)
     | (u, Call (r,n,args), v) as edge -> [edge] (* registers are already introduced in cfg *)
 end
 
+module RedElim : S = struct
+  let transform cfg =
+    let module Ana = Analyses.AvailExpr (struct let cfg = cfg end) (Memorization) in
+    let edge = function
+      (*| _ -> ?? "Exercise 3.2c"*)
+      | (u, Assign (r, e), v) when Memorization.is_memo r && Ana.available_at e u -> [u, Skip, v]
+      | k -> [k]
+    in
+    map edge cfg
+end
 
-module RedElim (C: Cfg) : S = struct
-  module Ana = Analyses.AvailExpr (C) (Memorization)
+module NonReachElim = struct
+  let transform cfg =
+    let rec dfs x =
+      ?? "Exercise 4.1a"
+    in
+    dfs start_node
+end
 
-  let transform = function
-    (*| _ -> ?? "Exercise 3.2c"*)
-    | (u, Assign (r, e), v) when Memorization.is_memo r && Ana.available_at e u -> [u, Skip, v]
-    | k -> [k]
+module DeadAsnElim : S = struct
+  let transform cfg =
+    let module Ana = Analyses.Liveness (struct let cfg = cfg end) in
+    let edge = function
+      | _ -> ?? "Exercise 4.1c"
+    in
+    map edge cfg
 end

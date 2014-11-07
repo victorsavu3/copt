@@ -4,6 +4,6 @@ struct s {
 }
 
 void main(){
-  struct s * pp;
+  struct s pp;
   pp.i = 1+2*3+2;
 }

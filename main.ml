@@ -11,9 +11,13 @@ open Analyses
 let commands = [
   "print", "Pretty print parsed input";
   "cfg", "Output the unmodified CFG in dot-format";
+  "reach", "CFG after elimination of unreachable nodes";
   "memo", "CFG after memorization transformation";
-  "avail", "CFG with available expressions";
+  (*"avail", "CFG with available expressions";*)
   "redelim", "CFG after simple redundancy elimination";
+  (*"copyprop", "CFG after copy propagation";*)
+  (*"live", "CFG with live registers";*)
+  "deadasn", "CFG after dead assignment elimination";
   ]
 
 let print_usage () = print_endline @@
@@ -33,13 +37,21 @@ let _ =
   print_endline @@ match cmd with
   | "print" -> Simc.declsToString ast
   | "cfg" -> from_decls ast |> pretty_cfg
+  | "reach" -> from_decls ast |> NonReachElim.transform |> pretty_cfg
   | "memo" ->
       from_decls ast
-      |> transform (module Memorization)
+      |> Memorization.transform
       |> pretty_cfg
   | "redelim" ->
-      let cfg = from_decls ast
-      |> transform (module Memorization) in
-      transform (module RedElim (struct let cfg = cfg end)) cfg
+      from_decls ast
+      |> Memorization.transform
+      |> RedElim.transform
+      |> pretty_cfg
+  | "deadasn" ->
+      from_decls ast
+      |> Memorization.transform
+      |> RedElim.transform
+      (*|> CopyProp.transform*)
+      |> DeadAsnElim.transform
       |> pretty_cfg
   | _ -> "Unimplemented command- see usage!"

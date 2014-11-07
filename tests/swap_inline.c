@@ -1,6 +1,5 @@
-int a[] = {1,3,2,4,5};
-
 int main(){
+    int a[] = {1,3,2,4,5};
     int i = 1;
     int j = 2;
     if(a[i] > a[j]){

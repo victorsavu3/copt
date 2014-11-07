@@ -19,29 +19,34 @@ module ConstraintSystem (D: Domain.Lattice) = struct
   module RoundRobin : Solver = struct
     let solve : csys -> valuation = fun csys ->
       (*?? "Exercise 3.2a"*)
+      let n = ref 0 in
       let round vals =
+        ignore (debug "### Round %i ###" !n); incr n;
+        List.iter (fun (v,rhs) -> ignore (debug "A[%s] = %s" (string_of_node v) (D.show (val_of vals v)))) csys;
         List.fold_right (fun (lhs,fi) (vals, fin) ->
           let lhs_val = val_of vals lhs in
           let rhs_val = fi (val_of vals) in
           let new_val = D.join lhs_val rhs_val in
+          (*debug "A[%i]: old: %s, new: %s" lhs (D.show lhs_val) (D.show rhs_val);*)
           if D.leq new_val lhs_val then
             vals, fin (* value not changed *)
           else
             Map.add lhs new_val vals, false
         ) csys (vals, true)
       in
-      let rec iterate vals =
-        let vals, fin = round vals in
-        if fin then vals else iterate vals
-      in
+      let rec iterate vals = let vals, fin = round vals in if fin then vals else iterate vals in
       val_of @@ iterate Map.empty
+    end
   end
-end
 
 module type Framework = sig
+  (*direction*)
   val dir: [`Fwd | `Bwd]
+  (*domain*)
   module D: Domain.Lattice
+  (*initial value*)
   val init: D.t
+  (*abstract effects*)
   val effect: action -> D.t -> D.t
 end
 
@@ -52,6 +57,7 @@ module CsysGenerator (F: Framework) = struct
     | `Bwd -> u, fun vals -> F.effect a (vals v)
   let init_constrnts cfg =
     let init_nodes = (match F.dir with `Fwd -> start_nodes | `Bwd -> end_nodes) cfg |> Set.to_list in
+    ignore (debug "init_nodes: %s" (String.concat ", " @@ List.map string_of_node init_nodes));
     List.map (fun n -> n, const F.init) init_nodes
   let csys_of_cfg : cfg -> csys = fun cfg ->
     let xs = List.map constrnt_of_edge @@ Set.elements cfg in

@@ -10,10 +10,14 @@ type edge = node * action * node
 type cfg = edge Set.t
 module type Cfg = sig val cfg: cfg end
 
-let node = ref 0
+let start_node = 0
+let node = ref start_node
 let nn () = Ref.post_incr node (* gets a fresh node *)
 let reg = ref 0
 let nr () = "$R" ^ string_of_int (Ref.post_incr reg) (* gets a fresh register *)
+
+let start_nodes cfg = Set.diff (Set.map Tuple3.first cfg) (Set.map Tuple3.third cfg)
+let end_nodes cfg = Set.diff (Set.map Tuple3.third cfg) (Set.map Tuple3.first cfg)
 
 (* error processing the cfg *)
 exception Cfg of string
@@ -186,13 +190,16 @@ let from_decl (u,edges) = function
 let from_decls decls =
   let funs, globs = List.partition (function Function _ -> true | _ -> false) decls in
   let mainfuns = List.filter (function Function(_,"main",_,_) -> true | _ -> false) funs in
-  if List.length mainfuns <> 1 then raise @@ Cfg "There must be exactly one function called main" else
-  let u = nn () in (* start node of the whole CFG *)
-  let v = nn () in (* end node of the whole CFG *)
-  let w,edges = List.fold_left from_decl (u,Set.empty) globs in (* initialize globals *)
-  let edges = Set.add (w, Call (None, "main", []), v) edges in (* implicit call to main *)
-  let x,edges = List.fold_left from_decl (w,edges) funs in (* function bodies *)
-  edges
+  let main = Option.get_exn (List.hd mainfuns) (Cfg "There must be exactly one function called main") in
+  if Config.no_fun then
+    if List.length globs <> 0 then raise @@ Cfg "Config.no_fun: globals are not supported" else
+    snd @@ from_decl (-1, Set.empty) main (* Note: start node is ignored for functions, so just using -1 *)
+  else
+    let u = nn () in (* start node of the whole CFG *)
+    let v = nn () in (* end node of the whole CFG *)
+    let w,edges = List.fold_left from_decl (u,Set.empty) globs in (* initialize globals *)
+    let edges = Set.add (w, Call (None, "main", []), v) edges in (* implicit call to main *)
+    snd @@ List.fold_left from_decl (w,edges) funs (* function bodies *)
 
 
 (* pretty printing of cfg *)
@@ -208,18 +215,30 @@ let pretty_action = function
 let pretty_edge (u,l,v) =
   sprintf "\t%d -> %d [label=\"%s\"]\n" u v (pretty_action l)
 
+let string_of_node = string_of_int
+let string_of_reg = identity
+
 let pretty_cfg cfg =
   let edges = String.concat "" (List.map pretty_edge (Set.to_list cfg)) in
   sprintf "digraph {\n%s}" edges
 
-(* collect all expressions *)
+(* collect expressions *)
 let expr_of_action = function
   | Pos e | Neg e | Assign (_,e) | Load (_,e) -> Set.singleton e
   | Store (e1,e2) -> Set.union (Set.singleton e1) (Set.singleton e2)
   | Call (r,n,args) -> List.fold_left (flip Set.add) Set.empty args
   | Skip -> Set.empty
-
 let expr_of_cfg : cfg -> expr Set.t = ExtSet.flat_map (fun (u,a,v) -> expr_of_action a)
 
-let start_nodes cfg = Set.diff (Set.map Tuple3.first cfg) (Set.map Tuple3.third cfg)
-let end_nodes cfg = Set.diff (Set.map Tuple3.third cfg) (Set.map Tuple3.first cfg)
+(* collect registers *)
+let rec regs_of_lval = function
+  | Var r -> Set.singleton r
+  | Deref e -> regs e
+  | Field (l,f) -> regs_of_lval l
+  | Index (l, e) -> Set.union (regs_of_lval l) (regs e)
+and regs = function
+  | Val _ | ArrInit _ -> Set.empty
+  | Lval l | Addr l -> regs_of_lval l
+  | Binop (e1, _, e2) -> Set.union (regs e1) (regs e2)
+  | App (f, args) -> List.fold_left (flip @@ Set.union % regs) (regs f) args
+let regs_of_cfg cfg = ExtSet.flat_map regs (expr_of_cfg cfg)

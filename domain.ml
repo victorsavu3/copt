@@ -36,6 +36,10 @@ module ExprBaseSet = BaseSet (struct type t = Simc.expr let show = Simc.exprToSt
 module ExprSubSet = ExprBaseSet.Sub
 module ExprSupSet (C: Cfg.Cfg) = ExprBaseSet.Sup (struct let bot = Cfg.expr_of_cfg C.cfg end)
 
+module RegBaseSet = BaseSet (struct type t = Cfg.reg let show = Cfg.string_of_reg end)
+module RegSubSet = RegBaseSet.Sub
+module RegSupSet (C: Cfg.Cfg) = RegBaseSet.Sup (struct let bot = Cfg.regs_of_cfg C.cfg end)
+
 module Flat (Base: Printable) : Lattice = struct
   type t = [`Top | `Lifted of Base.t | `Bot]
   let show = function `Top -> "Top" | `Bot -> "Bot" | `Lifted x -> Base.show x
