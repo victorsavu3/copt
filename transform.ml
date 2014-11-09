@@ -67,9 +67,11 @@ module RedElim : S = struct
 end
 
 module NonReachElim = struct
-  let transform cfg =
-    let rec dfs x =
-      ?? "Exercise 4.1a"
+  let transform orig =
+    let rec dfs : node -> cfg = fun x ->
+      let edges = (Set.filter (fun n -> (Tuple3.first n) == x) orig) in
+      let dest = Set.map Tuple3.third edges in
+        Set.fold Set.union (Set.map dfs dest) edges
     in
     dfs start_node
 end
