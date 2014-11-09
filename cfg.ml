@@ -241,4 +241,11 @@ and regs = function
   | Lval l | Addr l -> regs_of_lval l
   | Binop (e1, _, e2) -> Set.union (regs e1) (regs e2)
   | App (f, args) -> List.fold_left (flip @@ Set.union % regs) (regs f) args
-let regs_of_cfg cfg = ExtSet.flat_map regs (expr_of_cfg cfg)
+and cregs edge = 
+  let (_, a, _) = edge in
+    match a with
+      | Pos e | Neg e -> regs e
+      | Assign (v,e) | Load (v,e) -> Set.add v (regs e)
+      | Store (e1,e2) -> Set.union (regs e1) (regs e2)
+      | _ ->  Set.empty
+let regs_of_cfg cfg = ExtSet.flat_map cregs cfg
