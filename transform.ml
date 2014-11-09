@@ -80,7 +80,9 @@ module DeadAsnElim : S = struct
   let transform cfg =
     let module Ana = Analyses.Liveness (struct let cfg = cfg end) in
     let edge = function
-      | _ -> ?? "Exercise 4.1c"
+      | (u, Assign (r, _), v) when Ana.dead_at r v ->ignore (debug "dead %s at %i" r v); [u, Skip, v]
+      | (u, Load (r, _), v) when Ana.dead_at r v -> [u, Skip, v]
+      | other -> [other]
     in
     map edge cfg
 end
