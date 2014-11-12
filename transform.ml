@@ -68,10 +68,10 @@ end
 
 module NonReachElim = struct
   let transform cfg =
-    let rec dfs x =
+    let rec dfs seen x =
       ?? "Exercise 4.1a"
     in
-    dfs start_node
+    dfs Set.empty start_node
 end
 
 module DeadAsnElim : S = struct
