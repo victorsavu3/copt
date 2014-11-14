@@ -69,7 +69,11 @@ end
 module NonReachElim = struct
   let transform cfg =
     let rec dfs seen x =
-      ?? "Exercise 4.1a"
+      (*?? "Exercise 4.1a"*)
+      if Set.mem x seen then Set.empty else
+      let out_edges = Set.filter ((=) x % Tuple3.first) cfg in
+      Set.union out_edges
+        (ExtSet.flat_map (dfs (Set.add x seen) % Tuple3.third) out_edges)
     in
     dfs Set.empty start_node
 end
@@ -78,7 +82,10 @@ module DeadAsnElim : S = struct
   let transform cfg =
     let module Ana = Analyses.Liveness (struct let cfg = cfg end) in
     let edge = function
-      | _ -> ?? "Exercise 4.1c"
+      (*?? "Exercise 4.1c"*)
+      | u, Assign (r, e), v
+      | u, Load (r, e), v when Ana.dead_at r u -> [u, Skip, v]
+      | k -> [k]
     in
     map edge cfg
 end

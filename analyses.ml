@@ -28,13 +28,21 @@ end
 
 module Liveness (C: Cfg) = struct
   module Ana = struct
-    let dir = ?? "Exercise 4.1b"
+    let dir = `Bwd (*?? "Exercise 4.1b"*)
     module D = Domain.RegBaseSet.Sub
-    let init = ?? "Exercise 4.1b"
+    let init = D.empty (*?? "Exercise 4.1b"*)
 
     let dregs e = regs e |> Set.to_list |> D.of_list
     let effect a d = match a with
-      | _ -> ?? "Exercise 4.1b"
+      (*| _ -> ?? "Exercise 4.1b"*)
+      | Skip -> d
+      | Pos (e) | Neg (e) -> D.union d (dregs e)
+      | Assign (r, e)
+      | Load (r, e) ->
+          D.remove r d |> D.union (if D.mem r d then dregs e else D.empty)
+      | Store (e1, e2) -> D.union (dregs e1) (dregs e2)
+      | Call (r, n, args) ->
+          D.union d @@ List.fold_left (flip @@ D.union % dregs) D.empty args
   end
 
   module Csys = CsysGenerator (Ana)
