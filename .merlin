@@ -1,3 +1,3 @@
-PKG batteries
+PKG batteries ppx_deriving
 S .
 B _build

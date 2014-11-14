@@ -7,10 +7,9 @@ let (??) m = raise @@ Todo m
 (*let debug m = Printf.sprintf ("DEBUG: "^^m^^"\n")*)
 let debug m = Printf.fprintf stderr ("DEBUG: "^^m^^"\n")
 
-module Config = struct
-  (* intraprocedural: programs consist of just one function 'main' which will be the whole CFG, no globals *)
-  let no_fun = true
-end
+let comp21 f g x = f x (g x)
+let comp22 f g x y = f (g x) (g y)
+let comp23 f g h x = f (g x) (h x)
 
 (* some extensions to batteries modules *)
 module ExtSet = struct

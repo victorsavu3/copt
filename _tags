@@ -1,2 +1,2 @@
-true: package(batteries)
+true: package(batteries), package(ppx_deriving.std)
 true: bin_annot, debug

@@ -20,9 +20,7 @@ module AvailExpr (C: Cfg) (Memo: sig val is_memo: reg -> bool end) = struct
   end
 
   module Csys = CsysGenerator (Ana)
-  module Sol = Csys.RoundRobin
-
-  let av = Sol.solve @@ Csys.csys_of_cfg C.cfg
+  let av = Csys.solve C.cfg
   let available_at e u = Ana.D.mem e (av u)
 end
 
@@ -32,23 +30,22 @@ module Liveness (C: Cfg) = struct
     module D = Domain.RegBaseSet.Sub
     let init = D.empty (*?? "Exercise 4.1b"*)
 
-    let dregs e = regs e |> Set.to_list |> D.of_list
-    let effect a d = match a with
+    let effect a d =
+      let dregs = D.of_set % regs in
+      match a with
       (*| _ -> ?? "Exercise 4.1b"*)
       | Skip -> d
       | Pos (e) | Neg (e) -> D.union d (dregs e)
       | Assign (r, e)
       | Load (r, e) ->
+          (* this is true liveness *)
           D.remove r d |> D.union (if D.mem r d then dregs e else D.empty)
       | Store (e1, e2) -> D.union (dregs e1) (dregs e2)
-      | Call (r, n, args) ->
-          D.union d @@ List.fold_left (flip @@ D.union % dregs) D.empty args
+      | Call (r, n, args) -> D.union d @@ List.fold_left (flip @@ D.union % dregs) D.empty args
   end
 
   module Csys = CsysGenerator (Ana)
-  module Sol = Csys.RoundRobin
-
-  let lv = Sol.solve @@ Csys.csys_of_cfg C.cfg
+  let lv = Csys.solve C.cfg
   let live_at r u = Ana.D.mem r (lv u)
   let dead_at r u = not @@ live_at r u
 end

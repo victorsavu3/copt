@@ -1,12 +1,14 @@
 open Prelude
+module Format = Legacy.Format (* BatFormat.asprintf is missing, but needed for ppx_deriving *)
 
-type binop = Add | Sub | Mul | Div | Leq | Le | Geq | Gr | Eq | Neq | Asn
+type binop = Add | Sub | Mul | Div | Mod | Leq | Le | Geq | Gr | Eq | Neq | Asn [@@deriving show]
 
 type lval =
   | Var   of string
   | Deref of expr
   | Field of lval * string
   | Index of lval * expr
+  [@@deriving show]
 and expr =
   | Val   of int
   | ArrInit of int list
@@ -14,21 +16,24 @@ and expr =
   | Addr  of lval
   | Binop of expr * binop * expr
   | App   of expr * expr list
+  [@@deriving show]
 
 type typ =
   | Int | Void
   | Struct of string
   | Ptr    of typ
   | Arr    of typ
+  [@@deriving show]
 
 type stmt =
+  | Nop
   | Continue
   | Break
   | Return     of expr option
   | Local      of typ  * string * expr option
   | Expr       of expr
   | IfThenElse of expr * stmt * stmt
-  | For        of expr * expr * expr * stmt
+  | For        of stmt * expr * expr * stmt
   | While      of expr * stmt
   | DoWhile    of stmt * expr
   | Label      of string
@@ -63,6 +68,7 @@ let binopToString = function
   | Sub -> "-"
   | Mul -> "*"
   | Div -> "/"
+  | Mod -> "%"
   | Leq -> "<="
   | Le  -> "<"
   | Geq -> ">="
@@ -101,6 +107,7 @@ and indent = List.map ((^)"\t")
 and istmtToString x = indent @@ stmtToString x
 
 and stmtToString = function
+    | Nop -> [";"]
     | Continue -> ["continue;"]
     | Break -> ["break;"]
     | Return None -> ["return;"]
@@ -109,7 +116,7 @@ and stmtToString = function
     | Local (t,x,Some e) -> [typToString t^" "^x^" = "^exprToString e^";"]
     | Expr e -> [exprToString e^";"]
     | IfThenElse (b,x,y) -> ("if ("^exprToString b^")") :: istmtToString x @ "else" :: istmtToString y
-    | For (i,t,p,s) -> ("for ("^exprToString i^";"^exprToString t^";"^exprToString p^")") :: istmtToString s
+    | For (i,t,p,s) -> ("for ("^String.concat " " (stmtToString i)^";"^exprToString t^";"^exprToString p^")") :: istmtToString s
     | While (b,s) -> ("while ("^exprToString b^")") :: istmtToString s
     | DoWhile (s,b) -> "do" :: istmtToString s @ ["while ("^exprToString b^");"]
     | Label s -> [s^":"]

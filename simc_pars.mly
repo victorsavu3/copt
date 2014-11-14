@@ -3,12 +3,13 @@ open Simc
 %}
 
 %token AMP
-%token ADD SUB MUL DIV LEQ LE GEQ GR EQ NEQ
+%token ADD SUB MUL DIV MOD LEQ LE GEQ GR EQ NEQ
 
 %token EOF LPAR RPAR LBRAC RBRAC LCURL RCURL DEF COLON SCOLON COMMA DOT INT VOID
 %token IF ELSE RETURN GOTO CONTINUE BREAK WHILE FOR SWITCH CASE DEFAULT STRUCT DO
 %token <int>    VAL
 %token <string> ID
+%token <string> STRING
 
 %start decls
 %type <Simc.expr>       exp
@@ -21,7 +22,7 @@ open Simc
 %nonassoc LOW AMP DEF
 %nonassoc LEQ LE GEQ GR EQ NEQ
 %left ADD SUB
-%left MUL DIV
+%left MUL DIV MOD
 %nonassoc DOT LBRAC LPAR
 
 %%
@@ -48,6 +49,7 @@ ints_:                  { [] }
      ;
 
 s_exp: VAL                     { Val $1 }
+     | STRING                  { Val 0 } (* strings are treated as 0 *)
      | AMP lval                { Addr $2 }
      | lval     %prec LOW      { Lval $1 }
      | s_exp LPAR f_args RPAR  { App ($1,$3) }
@@ -59,6 +61,7 @@ exp: s_exp        { $1 }
    | exp SUB exp  { Binop ($1,Sub,$3) }
    | exp MUL exp  { Binop ($1,Mul,$3) }
    | exp DIV exp  { Binop ($1,Div,$3) }
+   | exp MOD exp  { Binop ($1,Mod,$3) }
    | exp LEQ exp  { Binop ($1,Leq,$3) }
    | exp LE  exp  { Binop ($1,Le ,$3) }
    | exp GEQ exp  { Binop ($1,Geq,$3) }
@@ -66,6 +69,12 @@ exp: s_exp        { $1 }
    | exp EQ  exp  { Binop ($1,Eq ,$3) }
    | exp NEQ exp  { Binop ($1,Neq,$3) }
    | exp DEF exp  { Binop ($1,Asn,$3) }
+   | exp ADD DEF exp  { Binop ($1,Asn,Binop ($1,Add,$4)) }
+   | exp SUB DEF exp  { Binop ($1,Asn,Binop ($1,Sub,$4)) }
+   | exp MUL DEF exp  { Binop ($1,Asn,Binop ($1,Mul,$4)) }
+   | exp DIV DEF exp  { Binop ($1,Asn,Binop ($1,Div,$4)) }
+   | exp ADD ADD { Binop ($1,Asn,Binop ($1,Add,Val 1)) }
+   | exp SUB SUB { Binop ($1,Asn,Binop ($1,Sub,Val 1)) }
    ;
 
 typ: INT        { Int }
@@ -104,12 +113,13 @@ decls: decl decls  { $1::$2 }
      | EOF         { [] }
      ;
 
-stmt: exp SCOLON                                    { Expr $1 }
+stmt: SCOLON                                        { Nop }
+    | exp SCOLON                                    { Expr $1 }
     | vdecl SCOLON                                  { Local (fst $1,snd $1,None) }
     | vdecl DEF init SCOLON                         { Local (fst $1,snd $1,Some $3) }
     | IF LPAR exp RPAR stmt    %prec THEN           { IfThenElse ($3,$5,Block []) }
     | IF LPAR exp RPAR stmt ELSE stmt               { IfThenElse ($3,$5,$7) }
-    | FOR LPAR exp SCOLON exp SCOLON exp RPAR stmt  { For ($3,$5,$7,$9) }
+    | FOR LPAR stmt exp SCOLON exp RPAR stmt        { For ($3,$4,$6,$8) }
     | WHILE LPAR exp RPAR stmt                      { While ($3,$5) }
     | DO stmt WHILE LPAR exp RPAR SCOLON            { DoWhile ($2,$5) }
     | ID COLON                                      { Label $1 }

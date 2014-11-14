@@ -1,9 +1,10 @@
 open Prelude
 open Simc
 open Printf
+module Format = Legacy.Format
 
-type node = int
-type reg = string
+type node = int [@@deriving show]
+type reg = string [@@deriving show]
 (* type var = Reg of string | Mem of int *)
 type action = Pos of expr | Neg of expr | Assign of reg * expr (* R := e *) | Load of reg * expr (* R = M[e]*) | Store of expr * expr (* M[e1] := e2*) | Skip | Call of reg option * string * expr list
 type edge = node * action * node
@@ -18,6 +19,8 @@ let nr () = "$R" ^ string_of_int (Ref.post_incr reg) (* gets a fresh register *)
 
 let start_nodes cfg = Set.diff (Set.map Tuple3.first cfg) (Set.map Tuple3.third cfg)
 let end_nodes cfg = Set.diff (Set.map Tuple3.third cfg) (Set.map Tuple3.first cfg)
+let out_edges n = Set.filter ((=) n % Tuple3.first)
+let in_edges n = Set.filter ((=) n % Tuple3.third)
 
 (* error processing the cfg *)
 exception Cfg of string
@@ -107,6 +110,10 @@ and from_expr (u,edges) : expr -> node * cfg * expr = function
 type context = { continue: node option; break: node option; return: node }
 let rec from_stmt ctx (u,edges) stmt =
   match stmt with
+  | Nop ->
+      let v = nn () in
+      let edges = Set.add (u, Skip, v) edges in
+      v,edges
   | Continue when ctx.continue=None -> raise @@ Cfg "Continue was used outside of context!"
   | Break when ctx.break=None -> raise @@ Cfg "Break was used outside of context!"
   | Continue -> (Option.get ctx.continue, Set.add (u, Skip, Option.get ctx.continue) edges)
@@ -129,7 +136,7 @@ let rec from_stmt ctx (u,edges) stmt =
       let edges = Set.union (Set.of_list [bv, Pos(r), tn; bv, Neg(r), fn; tv, Skip, en; fv, Skip, en]) edges in
       (en,edges)
   | For(i,b,c,s) ->
-      let v1,edges = from_stmt ctx (u,edges) (Expr i) in
+      let v1,edges = from_stmt ctx (u,edges) i in
       let v2,edges,r = from_expr (v1,edges) b in
       let fn = nn () in
       let tn = nn () in
@@ -215,9 +222,6 @@ let pretty_action = function
 let pretty_edge (u,l,v) =
   sprintf "\t%d -> %d [label=\"%s\"]\n" u v (pretty_action l)
 
-let string_of_node = string_of_int
-let string_of_reg = identity
-
 let pretty_cfg cfg =
   let edges = String.concat "" (List.map pretty_edge (Set.to_list cfg)) in
   sprintf "digraph {\n%s}" edges
@@ -241,11 +245,4 @@ and regs = function
   | Lval l | Addr l -> regs_of_lval l
   | Binop (e1, _, e2) -> Set.union (regs e1) (regs e2)
   | App (f, args) -> List.fold_left (flip @@ Set.union % regs) (regs f) args
-and cregs edge = 
-  let (_, a, _) = edge in
-    match a with
-      | Pos e | Neg e -> regs e
-      | Assign (v,e) | Load (v,e) -> Set.add v (regs e)
-      | Store (e1,e2) -> Set.union (regs e1) (regs e2)
-      | _ ->  Set.empty
-let regs_of_cfg cfg = ExtSet.flat_map cregs cfg
+let regs_of_cfg cfg = ExtSet.flat_map regs (expr_of_cfg cfg)

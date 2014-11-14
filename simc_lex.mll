@@ -11,7 +11,9 @@ let ws  = [' ' '\t']           (* whitespace *)
 let id  = ('_' | alpha) ('_' | alpha | digit)*
 let endlinecomment = "//" [^'\n']*
 let multlinecomment = "/*"([^'*']|('*'+[^'*''/'])|nl)*'*'+'/'
-let comments = endlinecomment | multlinecomment
+let cpp = "#" [^'\n']* (* input should be piped through preprocessor first (e.g. cpp) so that includes and macros are handled *)
+let comments = endlinecomment | multlinecomment | cpp
+let str = ('\"'(([^'\"']|"\\\"")* as s)'\"') | ('\''(([^'\'']|"\\'")* as s)'\'')
 
 rule ctok = parse
   | ws | comments   { ctok lexbuf }     (* skip blanks and comments *)
@@ -29,6 +31,7 @@ rule ctok = parse
   | "-"             { SUB       }
   | "*"             { MUL       }
   | "/"             { DIV       }
+  | '%'             { MOD }
   | "<="            { LEQ       }
   | "<"             { LE        }
   | "!="            { NEQ       }
@@ -56,4 +59,5 @@ rule ctok = parse
   | "int"           { INT       }
   | "void"          { VOID      }
   | id as word      { ID word  }
+  | str             { STRING(s) }
   | _ as x          { raise(Token (Char.escaped x^": unknown token in line "^string_of_int !line)) }
