@@ -49,7 +49,7 @@ ints_:                  { [] }
      ;
 
 s_exp: VAL                     { Val $1 }
-     | STRING                  { Val 0 } (* strings are treated as 0 *)
+     | STRING                  { Val 0 } /* strings are treated as 0 */
      | AMP lval                { Addr $2 }
      | lval     %prec LOW      { Lval $1 }
      | s_exp LPAR f_args RPAR  { App ($1,$3) }
