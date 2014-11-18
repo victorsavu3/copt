@@ -91,5 +91,15 @@ end
 
 module SkipElim : S = struct
   let transform cfg =
-    ?? "Exercise 5.2a"
+    let lst = Set.elements cfg in
+    let rec next cfg node = 
+      let matcher = function
+        | (u, Skip, v) when u == node -> Some (next lst v)
+        | (u, a, v) when u == node -> Some [a, v]
+        | _ -> None
+      in List.concat @@ List.filter_map matcher cfg
+    in let process = function 
+        | ( u, Skip, v) -> List.map (fun (act, next) -> (u, act, next)) (next lst v)
+        | e -> [e]
+    in Set.of_list @@ List.concat @@ List.map process lst |> NonReachElim.transform
 end
