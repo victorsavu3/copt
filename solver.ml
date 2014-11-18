@@ -40,7 +40,26 @@ module ConstraintSystem (D: Domain.Lattice) = struct
 
   module Worklist (Deps: sig val depend_on: var -> constrnt list end) : Solver = struct
     let solve : csys -> valuation = fun csys ->
-      ?? "Exercise 5.2b"
+      let gvar = fun (var, _) -> var in
+      let vars = Set.of_list @@ List.map gvar csys in
+      let csys_mapper = fun m (var, rhs) -> Map.add var rhs m in
+      let csys_map : (var, rhs) Map.t = List.fold_left csys_mapper Map.empty csys in 
+      let n = ref 0 in
+      let rec round map todo = 
+        ignore (debug "### Round %i ###" !n); incr n;
+        if Set.is_empty todo then map
+        else 
+          let c = Set.choose todo in
+          let cvals = val_of map in
+          let cval = cvals c in (* its value *)
+          let ex = (Map.find c csys_map |? fun _ -> cval) cvals in
+          let nmap = Map.add c ex map in
+          let dependents = Set.of_list @@ List.map gvar (Deps.depend_on c) in
+          let ntodo = if D.leq cval ex then Set.union todo dependents else todo in 
+            ignore (debug "A[%i]: old: %s, new: %s" c (D.show cval) (D.show ex));
+            round nmap (Set.remove c ntodo)
+      in let m = round Map.empty vars in
+      val_of m
   end
 end
 
