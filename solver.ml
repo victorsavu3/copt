@@ -69,7 +69,7 @@ module CsysGenerator (F: Framework) = struct
     init_constrnts cfg @ xs
   let dependencies : cfg -> (var -> constrnt list) = fun cfg ->
     let f (u,_,v as e) =
-      let k = match F.dir with `Fwd -> v | `Bwd -> u in
+      let k = match F.dir with `Fwd -> u | `Bwd -> v in
       Map.modify_def [] k (List.cons (constrnt_of_edge e))
     in
     fun k -> Map.find k (Set.fold f cfg Map.empty) |? []
