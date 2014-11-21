@@ -91,5 +91,10 @@ end
 
 module SkipElim : S = struct
   let transform cfg =
-    ?? "Exercise 5.2a"
+    (*?? "Exercise 5.2a"*)
+    let rec next seen u = match out_edges u cfg |> Set.to_list with
+      | [u, Skip, v] when not @@ Set.mem v seen -> next (Set.add u seen) v
+      | _ -> u
+    in
+    Set.map (Tuple3.map3 (next Set.empty)) cfg |> NonReachElim.transform
 end

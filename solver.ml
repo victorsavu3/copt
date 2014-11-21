@@ -40,7 +40,23 @@ module ConstraintSystem (D: Domain.Lattice) = struct
 
   module Worklist (Deps: sig val depend_on: var -> constrnt list end) : Solver = struct
     let solve : csys -> valuation = fun csys ->
-      ?? "Exercise 5.2b"
+      (*?? "Exercise 5.2b"*)
+      let rec step vals = function
+        | [] -> vals (* done *)
+        | (lhs,fi)::w ->
+            let lhs_val = val_of vals lhs in
+            let rhs_val = fi (val_of vals) in
+            let new_val = D.join lhs_val rhs_val in
+            ignore @@ debug "A[%i]: old: %s, new: %s, join: %s" lhs (D.show lhs_val) (D.show rhs_val) (D.show new_val);
+            if D.leq new_val lhs_val then
+              step vals w
+            else
+              let fjs = Deps.depend_on lhs in
+              if neg List.is_empty fjs then
+                ignore @@ debug "A[%i] changed -> added constraints for nodes {%s} to worklist" lhs (String.concat ", " @@ List.map (show_node%fst) fjs);
+              step (Map.add lhs new_val vals) (w @ fjs)
+      in
+      val_of @@ step Map.empty csys
   end
 end
 
