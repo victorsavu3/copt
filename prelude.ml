@@ -18,3 +18,21 @@ module ExtSet = struct
   let flatten s = fold union s empty
   let flat_map f = flatten % map f
 end
+
+module ExtList = struct
+  include List
+  let flat_map f = flatten % map f
+end
+
+module ExtString = struct
+  include String
+  let sub_after m s =
+    let l = length s in
+    let i = l - (find (rev s) (rev m) |? 0) in
+    sub s i (l - i)
+  let lines = nsplit "\n"
+  let unlines = concat "\n"
+  let map_unlines f = concat "\n" % List.map f
+  let uncomma = concat ", "
+  let set xs = "{ " ^ uncomma xs ^ " }"
+end

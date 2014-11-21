@@ -3,6 +3,12 @@ module Format = Legacy.Format (* BatFormat.asprintf is missing, but needed for p
 
 type binop = Add | Sub | Mul | Div | Mod | Leq | Le | Geq | Gr | Eq | Neq | Asn [@@deriving show]
 
+let b2i f a b = if f a b then 1 else 0
+let fun_of_op = function
+  | Add -> (+) | Sub -> (-) | Mul -> ( * ) | Div -> (/) | Mod -> (mod)
+  | Leq -> b2i (<=) | Le -> b2i (<) | Geq -> b2i (>=) | Gr -> b2i (>) | Eq -> b2i (=) | Neq -> b2i (<>)
+  | Asn -> fun a b -> b
+
 type lval =
   | Var   of string
   | Deref of expr

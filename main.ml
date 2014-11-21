@@ -1,30 +1,40 @@
 open Prelude
 open Printf
-
-let parse = Simc_pars.decls Simc_lex.ctok % Lexing.from_channel
-
 open Cfg
 open Transform
-open Domain
-open Analyses
 
-let commands = [
-  "print", "Pretty print parsed input";
-  "cfg", "Output the unmodified CFG in dot-format";
-  "reach", "CFG after elimination of unreachable nodes (done for everything below)";
-  "skip", "CFG after elimination of Skip-edges";
-  "memo", "CFG after memorization transformation";
-  (*"avail", "CFG with available expressions";*)
-  "redelim", "CFG after simple redundancy elimination";
-  (*"copyprop", "CFG after copy propagation";*)
-  (*"live", "CFG with live registers";*)
-  "deadasn", "CFG after dead assignment elimination";
-  "all", "CFG after all optimizations";
+let program = [
+  "Single commands", [
+    "print", "Pretty print parsed input", identity;
+  ];
+  "Composable commands on the CFG", [
+    "ident", "don't change anything", identity;
+    "out", "output the CFG in dot-format (implicit at the end)", tap (print_endline%pretty_cfg);
+    "reach", "elimination of unreachable nodes", NonReachElim.transform;
+    "skip", "elimination of Skip-edges", SkipElim.transform;
+    "memo", "memorization transformation", Memorization.transform;
+    (*"avail", "CFG with available expressions";*)
+    "redelim", "simple redundancy elimination", RedElim.transform;
+    (*"copyprop", "CFG after copy propagation";*)
+    "constprop", "constant propagation", ConstProp.transform;
+    (*"live", "CFG with live registers";*)
+    "deadasn", "dead assignment elimination", DeadAsnElim.transform;
+    "all", "all optimizations", fun cfg -> NonReachElim.transform cfg |> Memorization.transform |> RedElim.transform |> ConstProp.transform |> DeadAsnElim.transform |> SkipElim.transform;
+  ];
   ]
+let records = ExtList.flat_map snd program
+let commands = records |> List.map Tuple3.first
+let record_for_cmd cmd = List.find ((=) cmd % Tuple3.first) records |> Option.get
+let fun_for_cmd = Tuple3.third % record_for_cmd
 
-let print_usage () = print_endline @@
-  "usage: " ^ Sys.argv.(0) ^ " <command> [<file>]\n
-  Commands:\n" ^ String.concat "\n" @@ List.map (uncurry @@ sprintf "\t%s\t%s") commands;
+let print_usage ?cmd () =
+  let cmds = ExtString.map_unlines (fun (n,d,f) -> sprintf "\t\t%s\t%s" n d) in
+  let sections = ExtString.map_unlines (fun (n,xs) -> sprintf "\t%s\n%s" n (cmds xs)) in
+  (match cmd with Some cmd -> print_endline ("Unknown command: " ^ cmd) | None -> ());
+  print_endline @@
+  "usage: " ^ Sys.argv.(0) ^ " <command1,command2...> [<file>]\n
+  Commands:\n" ^ sections program ^ "\n
+  Example: " ^ Sys.argv.(0) ^ " reach,memo,redelim,skip file.c";
   exit 1
 
 let _ =
@@ -33,40 +43,13 @@ let _ =
     | [bin; cmd; path] -> cmd, open_in path
     | _ -> print_usage ()
   in
-  (*don't even try to parse if the command doesn't exist*)
-  if not @@ List.mem cmd @@ List.map fst commands then print_usage () else
+  let cmds = String.nsplit ~by:"," cmd in
+  (*don't even try to parse if one of the commands doesn't exist*)
+  List.iter (fun cmd -> if not @@ List.mem cmd commands then print_usage ~cmd:cmd ()) cmds;
+  let parse = Simc_pars.decls Simc_lex.ctok % Lexing.from_channel in
   let ast = parse cin in
-  print_endline @@ match cmd with
-  | "print" -> Simc.declsToString ast
-  | "cfg" -> from_decls ast |> pretty_cfg
-  | "reach" -> from_decls ast |> NonReachElim.transform |> pretty_cfg
-  | "skip" -> from_decls ast |> SkipElim.transform |> pretty_cfg
-  | "memo" ->
-      from_decls ast
-      |> NonReachElim.transform
-      |> Memorization.transform
-      |> pretty_cfg
-  | "redelim" ->
-      from_decls ast
-      |> NonReachElim.transform
-      |> Memorization.transform
-      |> RedElim.transform
-      |> pretty_cfg
-  | "deadasn" ->
-      from_decls ast
-      |> NonReachElim.transform
-      |> Memorization.transform
-      |> RedElim.transform
-      (*|> CopyProp.transform*)
-      |> DeadAsnElim.transform
-      |> pretty_cfg
-  | "all" ->
-      from_decls ast
-      |> NonReachElim.transform
-      |> Memorization.transform
-      |> RedElim.transform
-      (*|> CopyProp.transform*)
-      |> DeadAsnElim.transform
-      |> SkipElim.transform
-      |> pretty_cfg
-  | _ -> "Unimplemented command- see usage!"
+  match cmd with
+  | "print" -> print_endline @@ Simc.declsToString ast
+  | _ -> let cfg = from_decls ast in
+      let compose cfg cmd = cfg |> fun_for_cmd cmd in
+      ignore @@ List.fold_left compose cfg (cmds @ ["out"])

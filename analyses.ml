@@ -5,7 +5,7 @@ open Solver
 module AvailExpr (C: Cfg) (Memo: sig val is_memo: reg -> bool end) = struct
   module Ana = struct
     let dir = `Fwd
-    module D = Domain.ExprSupSet (C)
+    module D = Domain.ExprMustSet (C)
     let init = D.empty
 
     (* we assume this is done after the memorization transformation *)
@@ -27,7 +27,7 @@ end
 module Liveness (C: Cfg) = struct
   module Ana = struct
     let dir = `Bwd (*?? "Exercise 4.1b"*)
-    module D = Domain.RegBaseSet.Sub
+    module D = Domain.RegMaySet
     let init = D.empty (*?? "Exercise 4.1b"*)
 
     let effect a d =
@@ -40,12 +40,29 @@ module Liveness (C: Cfg) = struct
       | Load (r, e) ->
           (* this is true liveness *)
           D.remove r d |> D.union (if D.mem r d then dregs e else D.empty)
-      | Store (e1, e2) -> D.union (dregs e1) (dregs e2)
-      | Call (r, n, args) -> D.union d @@ List.fold_left (flip @@ D.union % dregs) D.empty args
+      | Store (e1, e2) -> D.union d @@ D.union (dregs e1) (dregs e2)
+      | Call (r, n, args) -> List.fold_left (flip @@ D.union % dregs) d args
   end
 
   module Csys = CsysGenerator (Ana)
   let lv = Csys.solve C.cfg
   let live_at r u = Ana.D.mem r (lv u)
   let dead_at r u = not @@ live_at r u
+end
+
+module ConstProp (C: Cfg)= struct
+  open Simc
+  module Ana = struct
+    let dir = `Fwd
+    module V = Domain.FlatInt
+    module D = Domain.RegMap.Must (V)
+    let init = D.top
+
+    let effect a d =
+      ?? "Exercise 6.2a" (* you can use fun_of_op for evaluating binops *)
+  end
+
+  module Csys = CsysGenerator (Ana)
+  let cv = Csys.solve C.cfg
+  let dead_at u = cv u = Ana.D.Bot
 end

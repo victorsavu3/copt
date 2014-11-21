@@ -1,3 +1,4 @@
+#include "stdio.h"
 
 int main() {
   int b;
@@ -6,5 +7,6 @@ int main() {
   } else {
     b = 2;
   }
+  printf("b: %d", b);
   return b;
 }

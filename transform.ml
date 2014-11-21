@@ -82,8 +82,8 @@ module DeadAsnElim : S = struct
     let module Ana = Analyses.Liveness (struct let cfg = cfg end) in
     let edge = function
       (*| _ -> ?? "Exercise 4.1c"*)
-      | (u, Assign (r, e), v)
-      | (u, Load (r, e), v) when Ana.dead_at r u -> [u, Skip, v]
+      | u, Assign (r, e), v
+      | u, Load (r, e), v when Ana.dead_at r u -> [u, Skip, v]
       | k -> [k]
     in
     map edge cfg
@@ -97,4 +97,14 @@ module SkipElim : S = struct
       | _ -> u
     in
     Set.map (Tuple3.map3 (next Set.empty)) cfg |> NonReachElim.transform
+end
+
+module ConstProp : S = struct
+  let transform cfg =
+    let module Ana = Analyses.ConstProp (struct let cfg = cfg end) in
+    (*handle dead code & constants*)
+    let edge = function
+      | _ -> ?? "Exercise 6.2b"
+    in
+    map edge cfg
 end
