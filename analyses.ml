@@ -58,11 +58,52 @@ module ConstProp (C: Cfg)= struct
     module D = Domain.RegMap.Must (V)
     let init = D.top
 
-    let effect a d =
-      ?? "Exercise 6.2a" (* you can use fun_of_op for evaluating binops *)
+    let rec getVal = fun e m -> 
+      let getBinOpVal : Simc.expr -> binop -> Simc.expr -> V.t = fun a op b ->
+        let v = (getVal a m, getVal b m) in
+        match v with
+          | V.Val va, V.Val vb -> V.Val ((fun_of_op op) va vb)
+          | _ -> V.top
+      in  
+      let ret : V.t = match e with 
+        | Simc.Val c -> V.Val c
+        | Lval l -> (match l with 
+          | Var r -> D.find r m
+          | _ -> V.top)
+        | Binop (a, op, b) -> getBinOpVal a op b
+        | _ -> V.top
+      in ret
+
+    let effect = fun a d ->
+      match d with
+      | D.Bot -> D.bot
+      | D.Vals d -> (
+        match a with
+        | Assign (r, e) -> D.Vals (D.add r (getVal e d) d)
+        | Load (r, _) -> D.Vals (D.add r V.top d)
+        | Pos(e) when (getVal e d) = (V.Val 0) -> D.bot
+        | Neg(e) when (getVal e d) <> (V.Val 0) && (getVal e d) <> (V.top) -> D.bot
+        | _ -> D.Vals (d)
+      )
+        (*?? "Exercise 6.2a" (* you can use fun_of_op for evaluating binops *)*)
   end
 
   module Csys = CsysGenerator (Ana)
   let cv = Csys.solve C.cfg
   let dead_at u = cv u = Ana.D.Bot
+  let val_at u r = 
+    let t = match cv u with 
+      | Ana.D.Bot -> Ana.V.top 
+      | Ana.D.Vals m -> Ana.D.find r m
+    in match t with
+      | Ana.V.Val c -> Some c
+      | _ -> None
+      
+  let exp_val_at u e = 
+    let t = match cv u with 
+      | Ana.D.Bot -> Ana.V.top 
+      | Ana.D.Vals m -> Ana.getVal e m
+    in match t with
+      | Ana.V.Val c -> Some c
+      | _ -> None
 end
