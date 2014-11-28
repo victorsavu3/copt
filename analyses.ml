@@ -112,3 +112,57 @@ module ConstProp (C: Cfg)= struct
       in
       expr e
 end
+
+module FlowInsensitiveAlias = struct
+  open Simc
+  module UnionFind (K: sig type t val order: t*t -> t*t end) : sig
+    type t
+    val create: unit -> t
+    val add: t -> K.t -> unit
+    val find: t -> K.t -> K.t
+    val union: t -> K.t -> K.t -> unit
+  end = struct
+    type t = (K.t, K.t) Hashtbl.t * (K.t, int) Hashtbl.t
+    let create () = ?? "exercise 7.3"
+    let add _ _ = ?? "exercise 7.3"
+    let find _ _ = ?? "exercise 7.3"
+    let union _ _ _ = ?? "exercise 7.3"
+  end
+  type key = Reg of reg | Mem of reg
+  module UF = UnionFind (struct
+    type t = key
+    let order (x,y) = match x,y with Reg _, Mem _ -> y,x | _ -> x,y
+  end)
+  (* prints equivalence classes to stderr *)
+  let debug cfg =
+    let regs = regs_of_cfg cfg in
+    let pi = UF.create () in (* empty union find data structure *)
+    Set.iter (fun reg -> UF.add pi (Reg reg); UF.add pi (Mem reg)) regs; (* for all regs p, add p and p[] *)
+    let rec union' pi x y =
+      ?? "exercise 7.3"
+    in
+    let edge (_,a,_) = match a with (* no pointer arithmetic! *)
+      (* x = y *)
+      | Assign (x, Lval (Var y)) ->
+          union' pi (Reg x) (Reg y)
+      (* x = *y *)
+      | Load (x, Lval (Var y))
+      (* x = y[e] array accesses get normalized in cfg.ml: y[e] -> rr = M[ry+re] *)
+      | Load (x, Binop (Lval (Var y), Add, _))
+      (* y[e] = x *)
+      | Store (Lval (Var y), Lval (Var x))
+      | Store (Binop (Lval (Var y), Add, _), Lval (Var x)) ->
+          union' pi (Reg x) (Mem y)
+      | _ -> ()
+    in
+    Set.iter edge cfg; (* build equivalence classes *)
+    let show = function Reg r -> r | Mem r -> r^"[]" in
+    let edges = ExtList.flat_map (fun reg ->
+      let f k1 =
+        let k2 = UF.find pi k1 in
+        Printf.sprintf "\t\"%s\" -> \"%s\"\n" (show k1) (show k2)
+      in
+      [f (Reg reg); f (Mem reg)]
+    ) (Set.elements regs) in
+    Printf.fprintf stderr "digraph {\n%s\n}" (String.concat "" edges)
+end

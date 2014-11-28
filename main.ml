@@ -9,10 +9,11 @@ let program = [
     "print", "Pretty print parsed input program", identity;
   ];
   "Output the CFG/analysis results in dot-format", [
-    "out", "output just the CFG", tap (print_endline%pretty_cfg);
+    "out", "output just the CFG (implicit at the end)", tap (print_endline%pretty_cfg);
     "avail", "CFG with available expressions", print_ana (module (Analyses.AvailExpr (Memorization)));
     "live", "CFG with live registers", print_ana (module Analyses.Liveness);
     "cpana", "CFG with constant propagation results", print_ana (module Analyses.Liveness);
+    "alias", "output equivalence groups for flow-insensitive alias analysis", tap Analyses.FlowInsensitiveAlias.debug;
   ];
   "Composable transformations on the CFG", [
     "ident", "don't change anything", identity;
@@ -38,7 +39,7 @@ let print_usage ?cmd () =
   print_endline @@
   "usage: " ^ Sys.argv.(0) ^ " <command1,command2...> [<file>]\n
   Commands:\n" ^ sections program ^ "\n
-  Example: " ^ Sys.argv.(0) ^ " reach,memo,avail,redelim,skip,out file.c";
+  Example: " ^ Sys.argv.(0) ^ " reach,memo,redelim,skip file.c";
   exit 1
 
 let _ =
@@ -58,4 +59,4 @@ let _ =
   (* composable commands *)
   | _ -> let cfg = from_decls ast in
       let compose cfg cmd = cfg |> fun_for_cmd cmd in
-      ignore @@ List.fold_left compose cfg cmds
+      ignore @@ List.fold_left compose cfg (cmds @ ["out"])
