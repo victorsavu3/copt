@@ -57,7 +57,7 @@ end
 
 module RedElim : S = struct
   let transform cfg =
-    let module Ana = Analyses.AvailExpr (struct let cfg = cfg end) (Memorization) in
+    let module Ana = Analyses.AvailExpr (Memorization) (struct let cfg = cfg end) in
     let edge = function
       (*| _ -> ?? "Exercise 3.2c"*)
       | (u, Assign (r, e), v) when Memorization.is_memo r && Ana.available_at e u -> [u, Skip, v]

@@ -2,7 +2,19 @@ open Prelude
 open Cfg
 open Solver
 
-module AvailExpr (C: Cfg) (Memo: sig val is_memo: reg -> bool end) = struct
+(* some analyses need the Cfg to generate bot of the used domain! *)
+module type S = functor (C: Cfg) -> sig
+  module Ana : Framework
+  val vals: ConstraintSystem(Ana.D).valuation
+end
+
+let pretty_ana (module A: S) cfg =
+  let module Asol = A (struct let cfg = cfg end) in
+  let str u = Asol.vals u |> Asol.Ana.D.show in
+  let nl = List.map (fun u -> u, str u) (nodes cfg |> Set.elements) in
+  pretty_cfg ~node_labels:nl cfg
+
+module AvailExpr (Memo: sig val is_memo: reg -> bool end) (C: Cfg) = struct
   module Ana = struct
     let dir = `Fwd
     module D = Domain.ExprMustSet (C)
@@ -20,8 +32,8 @@ module AvailExpr (C: Cfg) (Memo: sig val is_memo: reg -> bool end) = struct
   end
 
   module Csys = CsysGenerator (Ana)
-  let av = Csys.solve C.cfg
-  let available_at e u = Ana.D.mem e (av u)
+  let vals = Csys.solve C.cfg
+  let available_at e u = Ana.D.mem e (vals u)
 end
 
 module Liveness (C: Cfg) = struct
@@ -45,8 +57,8 @@ module Liveness (C: Cfg) = struct
   end
 
   module Csys = CsysGenerator (Ana)
-  let lv = Csys.solve C.cfg
-  let live_at r u = Ana.D.mem r (lv u)
+  let vals = Csys.solve C.cfg
+  let live_at r u = Ana.D.mem r (vals u)
   let dead_at r u = not @@ live_at r u
 end
 
@@ -81,10 +93,10 @@ module ConstProp (C: Cfg)= struct
   end
 
   module Csys = CsysGenerator (Ana)
-  let cv = Csys.solve C.cfg
-  let dead_at u = cv u = Ana.D.Bot
+  let vals = Csys.solve C.cfg
+  let dead_at u = vals u = Ana.D.Bot
   let const u e =
-    match cv u with Ana.D.Bot -> e | Ana.D.Vals m ->
+    match vals u with Ana.D.Bot -> e | Ana.D.Vals m ->
       let rec lval = function
         | Deref x -> Deref (expr x)
         | Field (l, s) -> Field (lval l, s)

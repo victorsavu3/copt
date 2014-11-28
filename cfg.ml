@@ -19,6 +19,7 @@ let nr () = "$R" ^ string_of_int (Ref.post_incr reg) (* gets a fresh register *)
 
 let start_nodes cfg = Set.diff (Set.map Tuple3.first cfg) (Set.map Tuple3.third cfg)
 let end_nodes cfg = Set.diff (Set.map Tuple3.third cfg) (Set.map Tuple3.first cfg)
+let nodes cfg = Set.union (Set.map Tuple3.first cfg) (Set.map Tuple3.third cfg)
 let out_edges n = Set.filter ((=) n % Tuple3.first)
 let in_edges n = Set.filter ((=) n % Tuple3.third)
 
@@ -222,9 +223,13 @@ let pretty_action = function
 let pretty_edge (u,l,v) =
   sprintf "\t%d -> %d [label=\"%s\"]\n" u v (pretty_action l)
 
-let pretty_cfg cfg =
+let pretty_node (u, l) =
+  sprintf "\t%d [xlabel=\"%s\"]\n" u (String.escaped l)
+
+let pretty_cfg ?node_labels cfg =
+  let nodes = String.concat "" (List.map pretty_node (node_labels |? [])) in
   let edges = String.concat "" (List.map pretty_edge (Set.to_list cfg)) in
-  sprintf "digraph {\n%s}" edges
+  sprintf "digraph {\n%s%s}" nodes edges
 
 (* collect expressions *)
 let expr_of_action = function
