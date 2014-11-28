@@ -104,7 +104,14 @@ module ConstProp : S = struct
     let module Ana = Analyses.ConstProp (struct let cfg = cfg end) in
     (*handle dead code & constants*)
     let edge = function
-      | _ -> ?? "Exercise 6.2b"
+      (*| _ -> ?? "Exercise 6.2b"*)
+      | u, _, v when Ana.dead_at u || Ana.dead_at v -> []
+      | u, Assign (r, e), v -> [u, Assign (r, Ana.const u e), v]
+      | u, Load (r, e), v -> [u, Load (r, Ana.const u e), v]
+      | u, Store (e1, e2), v -> [u, Store (Ana.const u e1, Ana.const u e2), v]
+      | u, Neg (e), v when Ana.const u e = Val 0 -> [u, Skip, v]
+      | u, Pos (e), v -> [u, (match Ana.const u e with Val x when x<>0 -> Skip | _ -> Pos (e)), v]
+      | k -> [k]
     in
     map edge cfg
 end

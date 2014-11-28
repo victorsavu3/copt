@@ -58,11 +58,45 @@ module ConstProp (C: Cfg)= struct
     module D = Domain.RegMap.Must (V)
     let init = D.top
 
+    let effect_binop e1 op e2 = match e1,op,e2 with
+      | _, Asn, _ -> raise @@ Cfg "Assignments as expressions should no longer be in the CFG!"
+      | V.Val a, op, V.Val b -> V.Val (fun_of_op op a b)
+      | _ -> V.Top
+    let rec effect_expr e m = match e with
+      | Val i -> V.Val i
+      | Lval (Var r) -> D.find r m
+      | Binop (e1, op, e2) -> effect_binop (effect_expr e1 m) op (effect_expr e2 m)
+      | _ -> V.Top
     let effect a d =
-      ?? "Exercise 6.2a" (* you can use fun_of_op for evaluating binops *)
+      (*?? "Exercise 6.2a" (* you can use fun_of_op for evaluating binops *)*)
+      match d with D.Bot -> D.Bot | D.Vals m ->
+      match a with
+      | Skip -> d
+      | Pos (e) -> (match effect_expr e m with V.Val 0 -> D.Bot | _ -> d)
+      | Neg (e) -> (match effect_expr e m with V.Val x when x<>0 -> D.Bot | _ -> d)
+      | Assign (r, e) -> D.Vals (D.add r (effect_expr e m) m)
+      | Load (r, e) -> D.Vals (D.add r V.Top m)
+      | Store (e1, e2) -> d
+      | Call _ -> d (* assume that calls don't change registers (used for debug printfs) *)
   end
 
   module Csys = CsysGenerator (Ana)
   let cv = Csys.solve C.cfg
   let dead_at u = cv u = Ana.D.Bot
+  let const u e =
+    match cv u with Ana.D.Bot -> e | Ana.D.Vals m ->
+      let rec lval = function
+        | Deref x -> Deref (expr x)
+        | Field (l, s) -> Field (lval l, s)
+        | Index (l, x) -> Index (lval l, expr x)
+        | x -> x
+      and expr e =
+        match Ana.effect_expr e m with Ana.V.Val i -> Val i | _ -> match e with
+          | Lval l -> Lval (lval l)
+          | Addr l -> Addr (lval l)
+          | Binop (e1, op, e2) -> Binop (expr e1, op, expr e2)
+          | App (f, args) -> App (expr f, List.map expr args)
+          | x -> x
+      in
+      expr e
 end
