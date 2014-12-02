@@ -35,4 +35,5 @@ module ExtString = struct
   let map_unlines f = concat "\n" % List.map f
   let uncomma = concat ", "
   let set xs = "{ " ^ uncomma xs ^ " }"
+  let remove m s = String.nreplace ~str:s ~sub:m ~by:""
 end

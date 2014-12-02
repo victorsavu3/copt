@@ -10,7 +10,7 @@ end
 
 let pretty_ana (module A: S) cfg =
   let module Asol = A (struct let cfg = cfg end) in
-  let str u = Asol.vals u |> Asol.Ana.D.show in
+  let str u = Asol.vals u |> Asol.Ana.D.show |> Domain.no_prefix in
   let nl = List.map (fun u -> u, str u) (nodes cfg |> Set.elements) in
   pretty_cfg ~node_labels:nl cfg
 

@@ -21,6 +21,8 @@ module type ToppedLattice = sig
 end
 
 (*general*)
+let no_prefix = List.fold_right ExtString.remove ["Simc."; "Domain."]
+
 module Flat (Base: Printable) = struct
   type t = Bot | Val of Base.t | Top [@@deriving show]
   (*let show = function Top -> "Top" | Bot -> "Bot" | Val x -> Base.show x*)
@@ -42,6 +44,7 @@ module BaseSet (Elt: Printable) = struct
     let show s = "{ " ^ (to_list s |> List.map Elt.show |> String.concat ", ") ^ " }"
     let pp fmt s = failwith "TODO BaseSet.Base.pp"
     let of_set = of_list % Set.to_list
+    let to_set = Set.of_list % to_list
   end
   module May = struct
     include Base
