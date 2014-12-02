@@ -12,7 +12,7 @@ let program = [
     "out", "output just the CFG", tap (print_endline%pretty_cfg);
     "avail", "CFG with available expressions", print_ana (module (Analyses.AvailExpr (Memorization)));
     "live", "CFG with live registers", print_ana (module Analyses.Liveness);
-    "cpana", "CFG with constant propagation results", print_ana (module Analyses.Liveness);
+    "cpana", "CFG with constant propagation results", print_ana (module Analyses.ConstProp);
     "alias", "output equivalence groups for flow-insensitive alias analysis", tap Analyses.FlowInsensitiveAlias.debug;
   ];
   "Composable transformations on the CFG", [
