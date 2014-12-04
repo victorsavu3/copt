@@ -122,11 +122,74 @@ module FlowInsensitiveAlias = struct
     val find: t -> K.t -> K.t
     val union: t -> K.t -> K.t -> unit
   end = struct
-    type t = (K.t, K.t) Hashtbl.t * (K.t, int) Hashtbl.t
-    let create () = ?? "exercise 7.3"
-    let add _ _ = ?? "exercise 7.3"
-    let find _ _ = ?? "exercise 7.3"
-    let union _ _ _ = ?? "exercise 7.3"
+    type t = { 
+      mutable ct : int; 
+      mutable mapping : (K.t, int) Hashtbl.t; 
+      mutable rev_mapping : (int, K.t) Hashtbl.t; 
+      mutable parents : (int, int) Hashtbl.t; 
+      mutable size : (int, int) Hashtbl.t
+    }
+    let create () = 
+      {parents=Hashtbl.create 20; size=Hashtbl.create 20; ct=1; mapping=Hashtbl.create 20; rev_mapping=Hashtbl.create 20}
+    
+    let add t e =
+      Hashtbl.add t.parents t.ct t.ct;
+      Hashtbl.add t.size t.ct 1;
+      Hashtbl.add t.mapping e t.ct;
+      Hashtbl.add t.rev_mapping t.ct e;
+      t.ct <- t.ct + 1;;
+    
+    (* helpers *)
+    let mapping t e = Option.get @@ Hashtbl.find t.mapping e
+    let rev_mapping t e = Option.get @@ Hashtbl.find t.rev_mapping e
+    
+    let set_parent t e1 e2 = (* parent of e1 is e2 *)
+      let e2s = Option.get @@ Hashtbl.find t.size e2 in
+      let pe1 = Option.get @@ Hashtbl.find t.parents e1 in
+      let pe1s = Option.get @@ Hashtbl.find t.size pe1 in
+      Hashtbl.replace t.size pe1 (pe1s - 1);
+      Hashtbl.replace t.size e2 (e2s + 1);
+      Hashtbl.replace t.parents e1 e2;;
+    
+    let swap_mapping t e1 e2 =
+      let e1m = Option.get @@ Hashtbl.find t.mapping e1 in
+      let e2m = Option.get @@ Hashtbl.find t.mapping e2 in
+      Hashtbl.replace t.mapping e1 e2m;
+      Hashtbl.replace t.mapping e2 e1m;
+      Hashtbl.replace t.rev_mapping e2m e1;
+      Hashtbl.replace t.rev_mapping e1m e2;;
+    
+    let find t e = 
+      let rec find' t e =
+        let p = Option.get @@ Hashtbl.find t e in
+        if p == e then 
+          e
+        else
+          find' t p
+      in
+      let rec update_parens t e top =
+        if e != top then
+          let p = Option.get @@ Hashtbl.find t.parents e in
+          set_parent t e top;
+          update_parens t p top
+      in
+      let me = mapping t e in
+      let r = find' t.parents me in
+      update_parens t me r;
+      rev_mapping t r
+    
+    let union t e1 e2 =  
+      let size t e = Option.get @@ Hashtbl.find t.size (mapping t e) in
+      let (l, g) = 
+        if size t e1 > size t e2 then 
+          (e2, e1) 
+        else 
+          (e1, e2) 
+      in
+      set_parent t (mapping t l) (mapping t g);
+      let (e1, e2) = K.order(l, g) in
+      if e1 != l then
+        swap_mapping t e1 e2
   end
   type key = Reg of reg | Mem of reg
   module UF = UnionFind (struct
@@ -139,7 +202,13 @@ module FlowInsensitiveAlias = struct
     let pi = UF.create () in (* empty union find data structure *)
     Set.iter (fun reg -> UF.add pi (Reg reg); UF.add pi (Mem reg)) regs; (* for all regs p, add p and p[] *)
     let rec union' pi x y =
-      ?? "exercise 7.3"
+      let x = UF.find pi x in
+      let y = UF.find pi y in
+      if x != y then
+        UF.union pi x y;
+        match x,y with
+          | Reg xr, Reg yr -> union' pi (Mem xr) (Mem yr)
+          | _ -> ()
     in
     let edge (_,a,_) = match a with (* no pointer arithmetic! *)
       (* x = y *)
