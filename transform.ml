@@ -83,7 +83,7 @@ module DeadAsnElim : S = struct
     let edge = function
       (*| _ -> ?? "Exercise 4.1c"*)
       | u, Assign (r, e), v
-      | u, Load (r, e), v when Ana.dead_at r u -> [u, Skip, v]
+      | u, Load (r, e), v when Ana.dead_at r v -> [u, Skip, v]
       | k -> [k]
     in
     map edge cfg
