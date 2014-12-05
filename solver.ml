@@ -61,21 +61,27 @@ module ConstraintSystem (D: Domain.Lattice) = struct
 end
 
 module type Framework = sig
-  (*direction*)
+  (* direction *)
   val dir: [`Fwd | `Bwd]
-  (*domain*)
+  (* domain *)
   module D: Domain.Lattice
-  (*initial value*)
+  (* initial value *)
   val init: D.t
-  (*abstract effects*)
+  (* abstract effects *)
   val effect: action -> D.t -> D.t
 end
 
-module CsysGenerator (F: Framework) = struct
+module type GenFramework = sig
+  include Framework
+  (* abstract effects on edges *)
+  val effect': edge -> D.t -> D.t
+end
+
+module GenCsysGenerator (F: GenFramework) = struct
   include ConstraintSystem (F.D)
   let constrnt_of_edge (u,a,v) = match F.dir with
-    | `Fwd -> v, fun vals -> F.effect a (vals u)
-    | `Bwd -> u, fun vals -> F.effect a (vals v)
+    | `Fwd -> v, fun vals -> F.effect' (u,a,v) (vals u)
+    | `Bwd -> u, fun vals -> F.effect' (u,a,v) (vals v)
   let init_constrnts cfg =
     let init_nodes = (match F.dir with `Fwd -> start_nodes | `Bwd -> end_nodes) cfg |> Set.to_list in
     ignore @@ debug "init_nodes: %s" (String.concat ", " @@ List.map show_node init_nodes);
@@ -96,3 +102,10 @@ module CsysGenerator (F: Framework) = struct
     ) in
     Solver.solve @@ csys_of_cfg cfg
 end
+
+module Framework2GenFramework (F : Framework) = struct
+  include F
+  let effect' = fun (u,a,v) -> F.effect a
+end
+
+module CsysGenerator (F: Framework) = GenCsysGenerator (Framework2GenFramework (F))

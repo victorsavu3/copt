@@ -68,6 +68,10 @@ module RegSet = BaseSet (struct type t = Cfg.reg [@@deriving show] end)
 module RegMaySet = RegSet.May
 module RegMustSet (C: Cfg.Cfg) = RegSet.Must (struct let bot = Cfg.regs_of_cfg C.cfg end)
 
+module NodeSet = BaseSet (struct type t = Cfg.node [@@deriving show] end)
+module NodeMaySet = NodeSet.May
+module NodeMustSet (C: Cfg.Cfg) = NodeSet.Must (struct let bot = Cfg.nodes C.cfg end)
+
 (*maps*)
 module BaseMap (K: Printable) = struct
  module Base = struct

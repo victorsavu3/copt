@@ -66,7 +66,7 @@ module RedElim : S = struct
     map edge cfg
 end
 
-module NonReachElim = struct
+module NonReachElim : S = struct
   let transform cfg =
     let rec dfs seen x =
       (*?? "Exercise 4.1a"*)
@@ -123,4 +123,13 @@ module AstLoopInv = struct
       | s -> s
     in
     map_stmts f ast
+end
+
+module LoopInv : S = struct
+  let transform cfg =
+    let module Ana = Analyses.Predominators (struct let cfg = cfg end) in
+    let edge = function
+      | _ -> ?? "Exercise 8.2"
+    in
+    map edge cfg
 end

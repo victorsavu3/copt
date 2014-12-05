@@ -188,3 +188,18 @@ module FlowInsensitiveAlias = struct
     ) (Set.elements regs) in
     Printf.fprintf stderr "digraph {\n%s\n}" (String.concat "" edges)
 end
+
+module Predominators (C: Cfg) = struct
+  module Ana = struct
+    let dir = `Fwd
+    module D = Domain.NodeMustSet (C)
+    let init = D.of_set @@ Cfg.start_nodes C.cfg
+
+    let effect a d = failwith "GenFramework.effect shouldn't be used"
+    let effect' (_,_,v) d = D.add v d
+  end
+
+  module Csys = GenCsysGenerator (Ana)
+  let vals = Csys.solve C.cfg
+  let dominates u v = Ana.D.mem u (vals v)
+end

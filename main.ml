@@ -15,17 +15,18 @@ let program = [
     "live", "CFG with live registers", print_ana (module Analyses.Liveness);
     "cpana", "CFG with constant propagation results", print_ana (module Analyses.ConstProp);
     "alias", "output equivalence groups for flow-insensitive alias analysis", tap Analyses.FlowInsensitiveAlias.debug;
+    "pdom", "CFG with predominators", print_ana (module Analyses.Predominators);
   ];
   "Composable transformations on the CFG", [
     "ident", "don't change anything", identity;
     "reach", "elimination of unreachable nodes", NonReachElim.transform;
     "skip", "elimination of Skip-edges", SkipElim.transform;
     "memo", "memorization transformation", Memorization.transform;
-    "redelim", "simple redundancy elimination", RedElim.transform;
-    (*"copyprop", "CFG after copy propagation";*)
+    "simpred", "simple redundancy elimination", RedElim.transform;
     "constprop", "constant propagation", ConstProp.transform;
     "deadasn", "dead assignment elimination", DeadAsnElim.transform;
     "all", "all optimizations", fun cfg -> NonReachElim.transform cfg |> Memorization.transform |> RedElim.transform |> ConstProp.transform |> DeadAsnElim.transform |> SkipElim.transform;
+    "loopinv", "loop inversion", LoopInv.transform;
   ];
   ]
 let records = ExtList.flat_map snd program
