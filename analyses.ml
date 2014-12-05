@@ -123,10 +123,24 @@ module FlowInsensitiveAlias = struct
     val union: t -> K.t -> K.t -> unit
   end = struct
     type t = (K.t, K.t) Hashtbl.t * (K.t, int) Hashtbl.t
-    let create () = ?? "exercise 7.3"
-    let add _ _ = ?? "exercise 7.3"
-    let find _ _ = ?? "exercise 7.3"
-    let union _ _ _ = ?? "exercise 7.3"
+    (*Exercise 7.3*)
+    let create () = Hashtbl.create 16, Hashtbl.create 8
+    let add (m,_) k = Hashtbl.add m k k
+    let rec find (m,s) k =
+      let p = Hashtbl.find m k |? k in (* look up parent *)
+      if p=k then p else
+        let r = find (m,s) p in (* find root *)
+        Hashtbl.add m k r; (* update k to point to root *)
+        r
+    let union (m,s) x y =
+      let size k = Hashtbl.find s k |? 1 in
+      let tx,sx = find (m,s) x, size x in
+      let ty,sy = find (m,s) y, size y in
+      if tx <> ty then ( (* different roots *)
+        let a, b = (if sx<sy then tx,ty else ty,tx) |> K.order in
+        Hashtbl.add m a b; (* append a to b *)
+        Hashtbl.add s b (sx+sy) (* update size *)
+      )
   end
   type key = Reg of reg | Mem of reg
   module UF = UnionFind (struct
@@ -139,7 +153,15 @@ module FlowInsensitiveAlias = struct
     let pi = UF.create () in (* empty union find data structure *)
     Set.iter (fun reg -> UF.add pi (Reg reg); UF.add pi (Mem reg)) regs; (* for all regs p, add p and p[] *)
     let rec union' pi x y =
-      ?? "exercise 7.3"
+      (*?? "Exercise 7.3"*)
+      let x = UF.find pi x in
+      let y = UF.find pi y in
+      if x <> y then (
+        UF.union pi x y;
+        match x,y with
+        | Reg x, Reg y -> union' pi (Mem x) (Mem y)
+        | _ -> ()
+      )
     in
     let edge (_,a,_) = match a with (* no pointer arithmetic! *)
       (* x = y *)
