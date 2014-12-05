@@ -7,6 +7,7 @@ let print_ana (module A: Analyses.S) = tap @@ print_endline % (Analyses.pretty_a
 let program = [
   "Single commands", [
     "print", "Pretty print parsed input program", identity;
+    "astloopinv", "Do loop inversion directly on the AST", identity;
   ];
   "Output the CFG/analysis results in dot-format", [
     "out", "output just the CFG", tap (print_endline%pretty_cfg);
@@ -56,6 +57,7 @@ let _ =
   match cmd with
   (* handle single commands *)
   | "print" -> print_endline @@ Simc.declsToString ast
+  | "astloopinv" -> print_endline @@ Simc.declsToString @@ AstLoopInv.transform ast
   (* composable commands *)
   | _ -> let cfg = from_decls ast in
       let compose cfg cmd = cfg |> fun_for_cmd cmd in

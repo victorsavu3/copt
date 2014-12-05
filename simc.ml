@@ -58,6 +58,13 @@ type decl =
 
 
 (* helper functions *)
+let map_stmts f ast =
+  let map_fun = function
+    | Function (r,n,args,xs) -> Function (r,n,args, List.map f xs)
+    | d -> d
+  in
+  List.map map_fun ast
+
 let rec reg_in_expr reg = function
   | Binop (e1,op,e2) -> reg_in_expr reg e1 || reg_in_expr reg e2
   | App (f, args) -> reg_in_expr reg f || List.exists (reg_in_expr reg) args

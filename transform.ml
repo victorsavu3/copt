@@ -115,3 +115,12 @@ module ConstProp : S = struct
     in
     map edge cfg
 end
+
+module AstLoopInv = struct
+  let transform ast =
+    let f = function
+      | While (e, xs) -> IfThenElse (e, DoWhile (xs, e), Nop)
+      | s -> s
+    in
+    map_stmts f ast
+end
