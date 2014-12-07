@@ -25,8 +25,8 @@ let program = [
     "simpred", "simple redundancy elimination", RedElim.transform;
     "constprop", "constant propagation", ConstProp.transform;
     "deadasn", "dead assignment elimination", DeadAsnElim.transform;
-    "all", "all optimizations", fun cfg -> NonReachElim.transform cfg |> Memorization.transform |> RedElim.transform |> ConstProp.transform |> DeadAsnElim.transform |> SkipElim.transform;
     "loopinv", "loop inversion", LoopInv.transform;
+    "all", "all optimizations", fun cfg -> NonReachElim.transform cfg |> Memorization.transform |> RedElim.transform |> ConstProp.transform |> DeadAsnElim.transform |> SkipElim.transform;
   ];
   ]
 let records = ExtList.flat_map snd program
