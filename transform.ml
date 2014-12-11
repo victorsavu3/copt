@@ -127,9 +127,59 @@ end
 
 module LoopInv : S = struct
   let transform cfg =
+    let list_cfg = Set.to_list cfg in
+    
+    let next : Cfg.node -> (Cfg.node * Cfg.action * Cfg.node) list = fun v -> 
+      let edge = function
+        | u, a, n when u == v -> true
+        | _ -> false
+      in
+      List.filter edge list_cfg
+    in
+    
+    let conditionElements v =
+      let n = next v in
+      let cond x = function
+          | _, Pos(e), _ -> x 
+          | _, Neg(e), _ -> not x
+          | _ -> ?? "Not condition node"
+      in
+      let _, e, vp = Option.get @@ List.find (cond true) n in 
+      let _, _, vn = Option.get @@ List.find (cond false) n in 
+      match e with 
+        | Pos(ex) -> (ex, vp, vn)
+        | _ -> ?? "funky"
+    in
+      
+    let rec copyPath u w2 v2 =
+        let n = next u in
+        let a, act, b = Option.get @@ List.hd n in
+        let n2 = next b in
+        if List.length n2 > 1 then
+          [w2, act, v2]
+        else
+          let t = nn() in
+          [w2, act, t] @ copyPath b t v2
+    in
+    
+    let rec conditionNode u =
+      let n = next u in
+      if List.length n > 1 then
+        u
+      else
+        let a, b, c = Option.get @@ List.hd n in
+        conditionNode c
+    in
+    
     let module Ana = Analyses.Predominators (struct let cfg = cfg end) in
     let edge = function
-      | _ -> ?? "Exercise 8.2"
+      | w, ab, u when Ana.dominates u w -> 
+        let w2 = nn() in
+        let v2 = nn() in
+        let v = conditionNode u in
+        let e, vp, vn = conditionElements v in
+        [w, ab, w2] @ [v2, Neg(e), vn] @ [v2, Pos(e), vp] @ copyPath u w2 v2
+      | e -> [e]
     in
     map edge cfg
 end
