@@ -160,8 +160,31 @@ end
 module LoopInv : S = struct
   let transform cfg =
     let module Ana = Analyses.Predominators (struct let cfg = cfg end) in
-    let edge = function
-      | _ -> ?? "Exercise 8.2"
+    let branches n =
+      let rec f aa visited u =
+        if Set.mem u visited then None else
+        match out_edges u cfg |> Set.to_list with
+        | [_, Pos _, _ as pos; _, Neg _, _ as neg]
+        | [_, Neg _, _ as neg; _, Pos _, _ as pos] ->
+            Some (aa,pos,neg) (* found guards *)
+        | [_,a,v] -> f (a::aa) (Set.add u visited) v (* continue search *)
+        | _ -> None (* end node or malformed *)
+      in f [] Set.empty n
+    in
+    let fold_actions aa u = List.fold_right (fun a (u,ks) ->
+        let v = nn () in
+        v, (u, a, v)::ks
+      ) aa (u, [])
+    in
+    let edge (u,a,v as k) =
+      (*?? "Exercise 8.2"*)
+      if not @@ Ana.dominates v u then [k] else
+      match branches v with (* we have a back edge *)
+      | Some (aa,(_,pos,vp),(_,neg,vn)) when List.length aa <= Config.max_loopinv ->
+          let w = nn () in
+          let v', aa_edges = fold_actions aa w in
+          (u, a, w) :: aa_edges @ [v', pos, vp; v', neg, vn]
+      | _ -> [k]
     in
     map edge cfg
 end
