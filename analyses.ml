@@ -14,7 +14,7 @@ let pretty_ana (module A: S) cfg =
   let nl = List.map (fun u -> u, str u) (nodes cfg |> Set.elements) in
   pretty_cfg ~node_labels:nl cfg
 
-module AvailExpr (Memo: sig val is_memo: reg -> bool end) (C: Cfg) = struct
+module AvailExprMemo (Memo: sig val is_memo: reg -> bool end) (C: Cfg) = struct
   module Ana = struct
     let dir = `Fwd
     module D = Domain.ExprMustSet (C)
@@ -80,7 +80,6 @@ module ConstProp (C: Cfg)= struct
       | Binop (e1, op, e2) -> effect_binop (effect_expr e1 m) op (effect_expr e2 m)
       | _ -> V.Top
     let effect a d =
-      (*?? "Exercise 6.2a" (* you can use fun_of_op for evaluating binops *)*)
       match d with D.Bot -> D.Bot | D.Vals m ->
       match a with
       | Skip -> d
@@ -96,21 +95,11 @@ module ConstProp (C: Cfg)= struct
   let vals = Csys.solve C.cfg
   let dead_at u = vals u = Ana.D.Bot
   let const u e =
-    match vals u with Ana.D.Bot -> e | Ana.D.Vals m ->
-      let rec lval = function
-        | Deref x -> Deref (expr x)
-        | Field (l, s) -> Field (lval l, s)
-        | Index (l, x) -> Index (lval l, expr x)
-        | x -> x
-      and expr e =
-        match Ana.effect_expr e m with Ana.V.Val i -> Val i | _ -> match e with
-          | Lval l -> Lval (lval l)
-          | Addr l -> Addr (lval l)
-          | Binop (e1, op, e2) -> Binop (expr e1, op, expr e2)
-          | App (f, args) -> App (expr f, List.map expr args)
-          | x -> x
-      in
-      expr e
+    match vals u with
+    | Ana.D.Bot -> e
+    | Ana.D.Vals m ->
+        let f e = match Ana.effect_expr e m with Ana.V.Val i -> Val i | _ -> e in
+        map_expr (Mexpr f) e
 end
 
 module FlowInsensitiveAlias = struct
@@ -189,6 +178,46 @@ module FlowInsensitiveAlias = struct
     Printf.fprintf stderr "digraph {\n%s\n}" (String.concat "" edges)
 end
 
+module AvailExpr (C: Cfg) = struct
+  module Ana = struct
+    let dir = `Fwd
+    module D = Domain.ExprMustSet (C)
+    let init = D.empty
+
+    let effect a d = match a with
+      | Pos (e) | Neg (e) -> D.add e d
+      | Assign (r, e)
+      | Load (r, e) ->
+          D.add e d |> D.filter (neg @@ Simc.reg_in_expr r)
+      | Store (e1, e2) -> D.add e1 d |> D.add e2
+      | _ -> d
+  end
+
+  module Csys = CsysGenerator (Ana)
+  let vals = Csys.solve C.cfg
+  let available_at e u = Ana.D.mem e (vals u)
+end
+
+module VeryBusyExpr (C: Cfg) = struct
+  module Ana = struct
+    let dir = `Bwd
+    module D = Domain.ExprMustSet (C)
+    let init = D.empty
+
+    let effect a d = match a with
+      | Pos (e) | Neg (e) -> D.add e d
+      | Assign (r, e)
+      | Load (r, e) ->
+          D.filter (neg @@ Simc.reg_in_expr r) d |> D.add e
+      | Store (e1, e2) -> D.add e1 d |> D.add e2
+      | _ -> d
+  end
+
+  module Csys = CsysGenerator (Ana)
+  let vals = Csys.solve C.cfg
+  let busy_at e u = Ana.D.mem e (vals u)
+end
+
 module Predominators (C: Cfg) = struct
   module Ana = struct
     let dir = `Fwd
@@ -202,4 +231,26 @@ module Predominators (C: Cfg) = struct
   module Csys = GenCsysGenerator (Ana)
   let vals = Csys.solve C.cfg
   let dominates u v = Ana.D.mem u (vals v)
+end
+
+module DelayableAsn (C: Cfg) = struct
+  module Ana = struct
+    let dir = `Fwd
+    module D = Domain.AsnMustSet (C)
+    let init = D.empty
+
+    let ass e = D.filter (fun (x,e') -> Set.mem x (regs e)) D.bot
+    let occ x = D.filter (fun (x',e) -> x=x' && Set.mem x (regs e)) D.bot
+    let effect a d = match a with
+      | Skip -> d
+      | Assign (x, e) -> D.diff d (D.union (ass e) (occ x)) |> D.add (x,e)
+      | Call (r,_,args) -> let rs = Option.map_default occ D.empty r in  D.diff d (D.union rs (List.fold_right (D.union % ass) args D.empty))
+      | Pos (e) | Neg (e) -> D.diff d (ass e)
+      | Load (x, e) -> D.diff d (D.union (ass e) (occ x))
+      | Store (e1, e2) -> D.diff d (D.union (ass e1) (ass e2))
+  end
+
+  module Csys = CsysGenerator (Ana)
+  let vals = Csys.solve C.cfg
+  let delayable a u = Ana.D.mem a (vals u)
 end

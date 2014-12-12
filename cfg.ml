@@ -6,8 +6,8 @@ module Format = Legacy.Format
 type node = int [@@deriving show]
 type reg = string [@@deriving show]
 (* type var = Reg of string | Mem of int *)
-type action = Pos of expr | Neg of expr | Assign of reg * expr (* R := e *) | Load of reg * expr (* R = M[e]*) | Store of expr * expr (* M[e1] := e2*) | Skip | Call of reg option * string * expr list
-type edge = node * action * node
+type action = Pos of expr | Neg of expr | Assign of reg * expr (* R := e *) | Load of reg * expr (* R = M[e]*) | Store of expr * expr (* M[e1] := e2*) | Skip | Call of reg option * string * expr list [@@deriving show]
+type edge = node * action * node [@@deriving show]
 type cfg = edge Set.t
 module type Cfg = sig val cfg: cfg end
 
@@ -251,3 +251,53 @@ and regs = function
   | Binop (e1, _, e2) -> Set.union (regs e1) (regs e2)
   | App (f, args) -> List.fold_left (flip @@ Set.union % regs) (regs f) args
 let regs_of_cfg cfg = ExtSet.flat_map regs (expr_of_cfg cfg)
+
+(* collect assigns *)
+let assign_of_action = function
+  | Assign (r, e) -> Set.singleton (r, e)
+  | _ -> Set.empty
+let assigns_of_cfg : cfg -> (reg*expr) Set.t = ExtSet.flat_map (fun (u,a,v) -> assign_of_action a)
+
+(* map expr *)
+type map_t = Mlval of (lval -> lval) | Mexpr of (expr -> expr) | Mreg of (reg -> reg)
+let rec map_lval : map_t -> lval -> lval = fun f l ->
+  let lval = map_lval f in
+  let expr = map_expr f in
+  let f_lval = match f with
+    | Mlval g -> g
+    | _ -> identity
+  in
+  f_lval @@ match l with
+  | Var x -> Var x
+  | Deref x -> Deref (expr x)
+  | Field (l, s) -> Field (lval l, s)
+  | Index (l, x) -> Index (lval l, expr x)
+and map_expr : map_t -> expr -> expr = fun f e ->
+  let lval = map_lval f in
+  let expr = map_expr f in
+  let f_expr = match f with
+    | Mexpr g -> g
+    | _ -> identity
+  in
+  f_expr @@ match e with
+  | Val x -> Val x
+  | ArrInit x -> ArrInit x
+  | Lval l -> Lval (lval l)
+  | Addr l -> Addr (lval l)
+  | Binop (e1, op, e2) -> Binop (expr e1, op, expr e2)
+  | App (f, args) -> App (expr f, List.map expr args)
+and map_action : map_t -> action -> action = fun f a ->
+  let expr = map_expr f in
+  let reg = match f with
+    | Mreg g -> g
+    | _ -> identity
+  in
+  match a with
+  | Pos e -> Pos (expr e)
+  | Neg e -> Neg (expr e)
+  | Assign (r, e) -> Assign (reg r, expr e)
+  | Load (r, e) -> Load (reg r, expr e)
+  | Store (e1, e2) -> Store (expr e1, expr e2)
+  | Call (r, n, args) -> Call (r, n, List.map expr args)
+  | Skip -> Skip
+let map_edge f (u,a,v) = u, map_action f a, v

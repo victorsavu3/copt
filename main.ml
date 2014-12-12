@@ -11,11 +11,14 @@ let program = [
   ];
   "Output the CFG/analysis results in dot-format", [
     "out", "output just the CFG", tap (print_endline%pretty_cfg);
-    "avail", "CFG with available expressions", print_ana (module (Analyses.AvailExpr (Memorization)));
+    "availmemo", "CFG with available expressions (uses memorization)", print_ana (module (Analyses.AvailExprMemo (Memorization)));
     "live", "CFG with live registers", print_ana (module Analyses.Liveness);
     "cpana", "CFG with constant propagation results", print_ana (module Analyses.ConstProp);
     "alias", "output equivalence groups for flow-insensitive alias analysis", tap Analyses.FlowInsensitiveAlias.debug;
+    "avail", "CFG with available expressions", print_ana (module (Analyses.AvailExpr));
+    "busy", "CFG with very busy expressions", print_ana (module Analyses.VeryBusyExpr);
     "pdom", "CFG with predominators", print_ana (module Analyses.Predominators);
+    "delay", "CFG with delayable assignments", print_ana (module Analyses.DelayableAsn);
   ];
   "Composable transformations on the CFG", [
     "ident", "don't change anything", identity;
@@ -25,8 +28,10 @@ let program = [
     "simpred", "simple redundancy elimination", RedElim.transform;
     "constprop", "constant propagation", ConstProp.transform;
     "deadasn", "dead assignment elimination", DeadAsnElim.transform;
+    "partred", "partial redundancy elimination", PartRedElim.transform;
     "loopinv", "loop inversion", LoopInv.transform;
-    "all", "all optimizations", fun cfg -> NonReachElim.transform cfg |> Memorization.transform |> RedElim.transform |> ConstProp.transform |> DeadAsnElim.transform |> SkipElim.transform;
+    "partdead", "partial dead assignment elimination", PartDeadAsn.transform;
+    "all", "all optimizations", fun cfg -> NonReachElim.transform cfg |> LoopInv.transform |> ConstProp.transform |> Memorization.transform |> RedElim.transform |> DeadAsnElim.transform |> PartRedElim.transform |> SkipElim.transform;
   ];
   ]
 let records = ExtList.flat_map snd program
