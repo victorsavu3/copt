@@ -7,6 +7,7 @@ let print_ana (module A: Analyses.S) = tap @@ print_endline % (Analyses.pretty_a
 let program = [
   "Single commands", [
     "print", "Pretty print parsed input program", identity;
+    "ast", "Print AST", identity;
     "astloopinv", "Do loop inversion directly on the AST", identity;
   ];
   "Output the CFG/analysis results in dot-format", [
@@ -31,6 +32,7 @@ let program = [
     "partred", "partial redundancy elimination", PartRedElim.transform;
     "loopinv", "loop inversion", LoopInv.transform;
     "partdead", "partial dead assignment elimination", PartDeadAsn.transform;
+    "tailcall", "tail call optimization", TailCall.transform;
     "all", "all optimizations", fun cfg -> NonReachElim.transform cfg |> LoopInv.transform |> ConstProp.transform |> Memorization.transform |> RedElim.transform |> DeadAsnElim.transform |> PartRedElim.transform |> SkipElim.transform;
   ];
   ]
@@ -59,10 +61,11 @@ let _ =
   (*don't even try to parse if one of the commands doesn't exist*)
   List.iter (fun cmd -> if not @@ List.mem cmd commands then print_usage ~cmd:cmd ()) cmds;
   let parse = Simc_pars.decls Simc_lex.ctok % Lexing.from_channel in
-  let ast = parse cin in
+  let ast = parse cin |> Simc.Locality.decls in
   match cmd with
   (* handle single commands *)
   | "print" -> print_endline @@ Simc.declsToString ast
+  | "ast" -> print_endline @@ Simc.astToString ast
   | "astloopinv" -> print_endline @@ Simc.declsToString @@ AstLoopInv.transform ast
   (* composable commands *)
   | _ -> let cfg = from_decls ast in

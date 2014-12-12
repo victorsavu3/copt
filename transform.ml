@@ -52,7 +52,7 @@ module Memorization = struct (* applicative functor *)
         v1, Assign (te2, e2), v2;
         v2, Store (var te1, var te2), v]
     | (u, Skip, v) -> [u, Skip, v]
-    | (u, Call (r,n,args), v) as edge -> [edge] (* registers are already introduced in cfg *)
+    | (u, Call _, v) as edge -> [edge] (* registers are already introduced in cfg *)
 end
 
 module RedElim : S = struct
@@ -74,7 +74,7 @@ module NonReachElim : S = struct
       out_edges x cfg
       |> comp21 Set.union @@ ExtSet.flat_map (dfs (Set.add x seen) % Tuple3.third)
     in
-    dfs Set.empty start_node
+    Set.fold (fun x a -> Set.union a @@ dfs Set.empty x) (init_nodes ()) Set.empty
 end
 
 module DeadAsnElim : S = struct
@@ -104,7 +104,6 @@ module ConstProp : S = struct
     let module Ana = Analyses.ConstProp (struct let cfg = cfg end) in
     (*handle dead code & constants*)
     let edge = function
-      (*| _ -> ?? "Exercise 6.2b"*)
       | u, _, v when Ana.dead_at u || Ana.dead_at v -> []
       | u, Assign (r, e), v -> [u, Assign (r, Ana.const u e), v]
       | u, Load (r, e), v -> [u, Load (r, Ana.const u e), v]
@@ -171,11 +170,6 @@ module LoopInv : S = struct
         | _ -> None (* end node or malformed *)
       in f [] Set.empty n
     in
-    let fold_actions aa u = List.fold_right (fun a (u,ks) ->
-        let v = nn () in
-        v, (u, a, v)::ks
-      ) aa (u, [])
-    in
     let edge (u,a,v as k) =
       (*?? "Exercise 8.2"*)
       if not @@ Ana.dominates v u then [k] else
@@ -196,11 +190,7 @@ module PartDeadAsn : S = struct
     let to_action (x,e) = Assign (x,e) in
     let fss1 a u = D.Ana.D.diff (D.vals u) (D.Ana.effect a (D.vals u)) |> D.Ana.D.to_set  |> Set.filter (fun (x,_) -> L.live_at x u) |> Set.map to_action in
     let fss2 a u v = D.Ana.D.diff (D.Ana.effect a (D.vals u)) (D.vals v) |> D.Ana.D.to_set |> Set.filter (fun (x,_) -> L.live_at x v) |> Set.map to_action in
-    let fold_actions xs u = Set.fold (fun a (u,s) ->
-        let v = nn () in
-        v, Set.add (u, a, v) s
-      ) xs (u,Set.empty) |> Tuple2.map2 Set.to_list
-    in
+    let fold_actions = fold_actions % Set.elements in
     let edge = function
       | u, (Assign (x, e) as a), v ->
           let w1, ss1 = fold_actions (fss1 a u) u in
@@ -217,4 +207,12 @@ module PartDeadAsn : S = struct
       ExtSet.flat_map (fun ve -> Set.map (fun d -> ve, to_action d, ve') (D.vals ve |> D.Ana.D.to_set)) (end_nodes cfg)
     in
     map edge cfg |> Set.union end_edges
+end
+
+module TailCall : S = struct
+  let transform cfg = if Config.no_fun then cfg else
+    let edge = function
+      | _ -> ?? "Exercise 9.2"
+    in
+    SkipElim.transform cfg |> map edge
 end

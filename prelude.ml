@@ -37,3 +37,5 @@ module ExtString = struct
   let set xs = "{ " ^ uncomma xs ^ " }"
   let remove m s = String.nreplace ~str:s ~sub:m ~by:""
 end
+
+let no_prefix = List.fold_right ExtString.remove ["Simc."; "Domain."]

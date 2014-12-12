@@ -21,7 +21,6 @@ module type ToppedLattice = sig
 end
 
 (*general*)
-let no_prefix = List.fold_right ExtString.remove ["Simc."; "Domain."]
 
 module Flat (Base: Printable) = struct
   type t = Bot | Val of Base.t | Top [@@deriving show]
@@ -62,7 +61,7 @@ end
 
 module ExprSet = BaseSet (struct type t = Simc.expr [@@deriving show] end)
 module ExprMaySet = ExprSet.May
-module ExprMustSet (C: Cfg.Cfg) = ExprSet.Must (struct let bot = Cfg.expr_of_cfg C.cfg end)
+module ExprMustSet (C: Cfg.Cfg) = ExprSet.Must (struct let bot = Cfg.exprs_of_cfg C.cfg end)
 
 module RegSet = BaseSet (struct type t = Cfg.reg [@@deriving show] end)
 module RegMaySet = RegSet.May

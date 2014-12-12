@@ -27,7 +27,7 @@ open Simc
 
 %%
 
-lval: ID                    { Var $1 }
+lval: ID                    { Var (None,$1) }
     | MUL s_exp             { Deref $2 }
     | lval DOT ID           { Field ($1,$3) }
     | lval LBRAC exp RBRAC  { Index ($1,$3) }
@@ -96,9 +96,9 @@ vdecls:                      { [] }
       ;
 
 decl: STRUCT ID LCURL vdecls RCURL             { StructDecl ($2,$4) }
-    | vdecl SCOLON                             { Global (fst $1, snd $1, None) }
-    | vdecl DEF init SCOLON                    { Global (fst $1, snd $1, Some $3) }
-    | typ ID LPAR args RPAR LCURL stmts RCURL  { Function ($1,$2,$4,$7) }
+    | vdecl SCOLON                             { GlobalDecl (fst $1, snd $1, None) }
+    | vdecl DEF init SCOLON                    { GlobalDecl (fst $1, snd $1, Some $3) }
+    | typ ID LPAR args RPAR LCURL stmts RCURL  { FunDecl ($1,$2,$4,$7) }
     ;
 
 args:              { [] }
@@ -115,8 +115,8 @@ decls: decl decls  { $1::$2 }
 
 stmt: SCOLON                                        { Nop }
     | exp SCOLON                                    { Expr $1 }
-    | vdecl SCOLON                                  { Local (fst $1,snd $1,None) }
-    | vdecl DEF init SCOLON                         { Local (fst $1,snd $1,Some $3) }
+    | vdecl SCOLON                                  { LocalDecl (fst $1,snd $1,None) }
+    | vdecl DEF init SCOLON                         { LocalDecl (fst $1,snd $1,Some $3) }
     | IF LPAR exp RPAR stmt    %prec THEN           { IfThenElse ($3,$5,Block []) }
     | IF LPAR exp RPAR stmt ELSE stmt               { IfThenElse ($3,$5,$7) }
     | FOR LPAR stmt exp SCOLON exp RPAR stmt        { For ($3,$4,$6,$8) }

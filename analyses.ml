@@ -10,7 +10,7 @@ end
 
 let pretty_ana (module A: S) cfg =
   let module Asol = A (struct let cfg = cfg end) in
-  let str u = Asol.vals u |> Asol.Ana.D.show |> Domain.no_prefix in
+  let str u = Asol.vals u |> Asol.Ana.D.show |> no_prefix in
   let nl = List.map (fun u -> u, str u) (nodes cfg |> Set.elements) in
   pretty_cfg ~node_labels:nl cfg
 
@@ -53,7 +53,7 @@ module Liveness (C: Cfg) = struct
           (* this is true liveness *)
           D.remove r d |> D.union (if D.mem r d then dregs e else D.empty)
       | Store (e1, e2) -> D.union d @@ D.union (dregs e1) (dregs e2)
-      | Call (r, n, args) -> List.fold_left (flip @@ D.union % dregs) d args
+      | Call (n, args) -> List.fold_left (flip @@ D.union % dregs) d args
   end
 
   module Csys = CsysGenerator (Ana)
@@ -76,7 +76,7 @@ module ConstProp (C: Cfg)= struct
       | _ -> V.Top
     let rec effect_expr e m = match e with
       | Val i -> V.Val i
-      | Lval (Var r) -> D.find r m
+      | Lval (Var (loc,r)) -> D.find r m
       | Binop (e1, op, e2) -> effect_binop (effect_expr e1 m) op (effect_expr e2 m)
       | _ -> V.Top
     let effect a d =
@@ -154,15 +154,15 @@ module FlowInsensitiveAlias = struct
     in
     let edge (_,a,_) = match a with (* no pointer arithmetic! *)
       (* x = y *)
-      | Assign (x, Lval (Var y)) ->
+      | Assign (x, Lval (Var (_,y))) ->
           union' pi (Reg x) (Reg y)
       (* x = *y *)
-      | Load (x, Lval (Var y))
+      | Load (x, Lval (Var (_,y)))
       (* x = y[e] array accesses get normalized in cfg.ml: y[e] -> rr = M[ry+re] *)
-      | Load (x, Binop (Lval (Var y), Add, _))
+      | Load (x, Binop (Lval (Var (_,y)), Add, _))
       (* y[e] = x *)
-      | Store (Lval (Var y), Lval (Var x))
-      | Store (Binop (Lval (Var y), Add, _), Lval (Var x)) ->
+      | Store (Lval (Var (_,y)), Lval (Var (_,x)))
+      | Store (Binop (Lval (Var (_,y)), Add, _), Lval (Var (_,x))) ->
           union' pi (Reg x) (Mem y)
       | _ -> ()
     in
@@ -244,7 +244,7 @@ module DelayableAsn (C: Cfg) = struct
     let effect a d = match a with
       | Skip -> d
       | Assign (x, e) -> D.diff d (D.union (ass e) (occ x)) |> D.add (x,e)
-      | Call (r,_,args) -> let rs = Option.map_default occ D.empty r in  D.diff d (D.union rs (List.fold_right (D.union % ass) args D.empty))
+      | Call (n,args) -> let rs = occ (ret_reg n) in  D.diff d (D.union rs (List.fold_right (D.union % ass) args D.empty))
       | Pos (e) | Neg (e) -> D.diff d (ass e)
       | Load (x, e) -> D.diff d (D.union (ass e) (occ x))
       | Store (e1, e2) -> D.diff d (D.union (ass e1) (ass e2))

@@ -9,8 +9,9 @@ let fun_of_op = function
   | Leq -> b2i (<=) | Le -> b2i (<) | Geq -> b2i (>=) | Gr -> b2i (>) | Eq -> b2i (=) | Neq -> b2i (<>)
   | Asn -> fun a b -> b
 
+type locality = Local | Global [@@deriving show]
 type lval =
-  | Var   of string
+  | Var   of locality option * string
   | Deref of expr
   | Field of lval * string
   | Index of lval * expr
@@ -36,7 +37,7 @@ type stmt =
   | Continue
   | Break
   | Return     of expr option
-  | Local      of typ  * string * expr option
+  | LocalDecl  of typ  * string * expr option
   | Expr       of expr
   | IfThenElse of expr * stmt * stmt
   | For        of stmt * expr * expr * stmt
@@ -46,21 +47,24 @@ type stmt =
   | Goto       of string
   | Switch     of expr * (switch_stmt list)
   | Block      of stmt list
+  [@@deriving show]
 and switch_stmt =
   | Default
   | Case            of int
   | NormalStatement of stmt
+  [@@deriving show]
 
 type decl =
   | StructDecl of string * (typ * string) list
-  | Global     of typ * string * expr option
-  | Function   of typ * string * (typ * string) list * stmt list
+  | GlobalDecl of typ * string * expr option
+  | FunDecl    of typ * string * (typ * string) list * stmt list
+  [@@deriving show]
 
 
 (* helper functions *)
 let map_stmts f ast =
   let map_fun = function
-    | Function (r,n,args,xs) -> Function (r,n,args, List.map f xs)
+    | FunDecl (r,n,args,xs) -> FunDecl (r,n,args, List.map f xs)
     | d -> d
   in
   List.map map_fun ast
@@ -71,7 +75,7 @@ let rec reg_in_expr reg = function
   | Lval lval | Addr lval -> reg_in_lval reg lval
   | Val _ | ArrInit _ -> false
 and reg_in_lval reg = function
-  | Var name -> reg=name
+  | Var (loc,name) -> reg=name
   | Deref e -> reg_in_expr reg e
   | Field (b, name) -> reg_in_lval reg b
   | Index (b, i) -> reg_in_lval reg b || reg_in_expr reg i
@@ -98,7 +102,7 @@ let rec typToString = function
   | Arr t -> typToString t^"[]"
 
 let rec lvalToString = function
-  | Var x -> x
+  | Var (loc,x) -> x
   | Deref e -> exprToString e
   | Index (l,e) -> lvalToString l^"["^exprToString e^"]"
   | Field (l,n) -> lvalToString l^"."^n
@@ -125,8 +129,8 @@ and stmtToString = function
     | Break -> ["break;"]
     | Return None -> ["return;"]
     | Return (Some x) -> ["return "^exprToString x^";"]
-    | Local (t,x,None) -> [typToString t^" "^x^";"]
-    | Local (t,x,Some e) -> [typToString t^" "^x^" = "^exprToString e^";"]
+    | LocalDecl (t,x,None) -> [typToString t^" "^x^";"]
+    | LocalDecl (t,x,Some e) -> [typToString t^" "^x^" = "^exprToString e^";"]
     | Expr e -> [exprToString e^";"]
     | IfThenElse (b,x,y) -> ("if ("^exprToString b^")") :: istmtToString x @ "else" :: istmtToString y
     | For (i,t,p,s) -> ("for ("^String.concat " " (stmtToString i)^";"^exprToString t^";"^exprToString p^")") :: istmtToString s
@@ -156,10 +160,41 @@ let rec argToString = function
 
 let declToString = function
   | StructDecl (n,xs) -> "struct "^n^" {"^defsToString xs^"}\n"
-  | Global  (t,n,None)  ->  typToString t^" "^n^";\n"
-  | Global  (t,n,Some e)  ->  typToString t^" "^n^" = "^exprToString e^";\n"
-  | Function (r,n,args,xs) -> typToString r^" "^n^"("^argToString args^") {\n"^String.concat "\n" (istmtsToString xs)^"\n}\n"
+  | GlobalDecl  (t,n,None)  ->  typToString t^" "^n^";\n"
+  | GlobalDecl  (t,n,Some e)  ->  typToString t^" "^n^" = "^exprToString e^";\n"
+  | FunDecl (r,n,args,xs) -> typToString r^" "^n^"("^argToString args^") {\n"^String.concat "\n" (istmtsToString xs)^"\n}\n"
 
 let rec declsToString = function
   | [] -> ""
   | x::xs -> declToString x^declsToString xs
+
+let astToString = String.concat "\n" % List.map (no_prefix%show_decl)
+
+module Locality : sig
+  val decls: decl list -> decl list
+end = struct
+  type t = (string, locality) Map.t
+
+  let local vname = Map.add vname Local
+  let global vname = Map.add vname Global
+
+  let fold : (t -> 'a -> t*'a) -> t -> 'a list -> 'a list =
+    fun f m xs -> snd @@ List.fold_left (fun (m,xs') x -> let m',x' = f m x in m',xs'@[x']) (m,[]) xs
+
+  let rec lval m : lval -> lval = function
+    | _ -> ?? "Exercise 9.2"
+  and expr m : expr -> expr = function
+    | _ -> ?? "Exercise 9.2"
+  and exprs m = List.map (expr m)
+
+  let rec stmt m = function
+    | _ -> ?? "Exercise 9.2"
+  and stmts m = fold stmt m
+
+  let decl m = function
+    | _ -> ?? "Exercise 9.2"
+
+  let extern_funs = ["printf"] (* TODO this should depend on the included header files *)
+  let init = List.fold_left (fun m f -> Map.add f Global m) Map.empty extern_funs
+  let decls = fold decl init
+end
