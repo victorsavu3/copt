@@ -182,17 +182,68 @@ end = struct
     fun f m xs -> snd @@ List.fold_left (fun (m,xs') x -> let m',x' = f m x in m',xs'@[x']) (m,[]) xs
 
   let rec lval m : lval -> lval = function
-    | _ -> ?? "Exercise 9.2"
+    | Var(None, n) -> 
+      (
+      match Map.find n m with
+        | None -> ?? "Variable used before declaration"
+        | l -> Var(l, n)
+      )
+    | Deref(e) -> Deref(expr m e)
+    | Field(l, n) -> Field(lval m l, n)
+    | Index(l, e) -> Index(lval m l, expr m e)
+    | v -> v
   and expr m : expr -> expr = function
-    | _ -> ?? "Exercise 9.2"
+    | Lval(v) -> Lval(lval m v)
+    | Addr(v) -> Addr(lval m v)
+    | Binop(e1, o, e2) -> Binop(expr m e1, o, expr m e2)
+    | App(e, el) -> App(expr m e, exprs m el)
+    | e -> e
   and exprs m = List.map (expr m)
 
   let rec stmt m = function
-    | _ -> ?? "Exercise 9.2"
-  and stmts m = fold stmt m
+    | LocalDecl (t,x,None) -> local x m, LocalDecl (t,x,None)
+    | LocalDecl (t,x,Some(e)) -> local x m, LocalDecl (t,x, Some(expr m e))
+    | Label s -> local s m, Label s
+    
+    | Return (Some(e)) -> m, Return (Some(expr m e))
+    | Expr(e) -> m, Expr(expr m e)
+    | IfThenElse (b,x,y) -> m, IfThenElse (expr m b, stmt_convert m x, stmt_convert m y)
+    | For (i,t,p,s) -> 
+      let mf, ip = stmt m i in
+      m, For (ip, expr mf t,expr mf p,stmt_convert mf s)
+    | While (b,s) -> m, While (expr m b, stmt_convert m s)
+    | DoWhile (s,b) -> m, DoWhile (stmt_convert m s, expr m b)
+    | Goto s  -> 
+      (
+        match Map.find s m with
+          | None -> ?? "Jump to undefined label"
+          | Some(Local) -> m, Goto s
+          | Some(Global) -> ?? "Global labels should not exist"
+      )
+    | Block(xs) -> m, Block(stmts m xs)
+    | Switch (e,xs) -> m, Switch (expr m e, stmt_switch m xs)
+    
+    | s -> m, s
+  and stmt_switch m = function 
+    | [] -> []
+    | (NormalStatement s)::xs -> [NormalStatement(stmt_convert m s)] @ stmt_switch m xs
+    | s::xs -> stmt_switch m xs
+  and stmt_convert m s =
+    let (m, s) = stmt m s in s
+  and stmts m : stmt list -> stmt list = fold stmt m
+
+  let rec process_args m = function
+    | [] -> m
+    | (t, n)::xs -> process_args (local n m) xs
 
   let decl m = function
-    | _ -> ?? "Exercise 9.2"
+    | GlobalDecl (t,n,None) -> global n m, GlobalDecl (t,n,None)
+    | GlobalDecl (t,n,Some(e)) -> global n m, GlobalDecl (t,n,Some(expr m e))
+    | FunDecl (r,n,args,xs) -> 
+      let mf = global n m in
+      let mp = process_args mf args in
+      mf, FunDecl (r,n,args, stmts mp xs)
+    | s -> m, s
 
   let extern_funs = ["printf"] (* TODO this should depend on the included header files *)
   let init = List.fold_left (fun m f -> Map.add f Global m) Map.empty extern_funs
