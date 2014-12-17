@@ -211,12 +211,24 @@ end
 
 module TailCall : S = struct
   let transform cfg = if Config.no_fun then cfg else
+    let matcher = Str.regexp "\\$R[0-9]+" in
+    let matcher_ret = Str.regexp "\\$Rret_.*" in
+    
     let return_cleanup = function
+      | u, (Assign (x, Lval(Var(loc, ret)))), v when Set.mem v (FunNodes.end_nodes ()) -> 
+        ignore @@ debug "found ending %d" v;
+        if Str.string_match matcher x 0 && Str.string_match matcher_ret ret 0 then
+          [u, Skip, v]
+        else
+          [u, (Assign (x, Lval(Var(loc, ret)))), v]
       | u, (Assign (x, Lval(Var(loc, ret)))), v -> 
         (
         match out_edges v cfg |> Set.to_list with
           | [v, (Assign (ret, Lval(Var(_, x)))), w] when Set.mem w (FunNodes.end_nodes ()) ->
-            [u, Skip, w]
+            if Str.string_match matcher x 0 && Str.string_match matcher_ret ret 0 then
+              [u, Skip, w]
+            else
+              [u, (Assign (x, Lval(Var(loc, ret)))), v]
           | _ -> [u, (Assign (x, Lval(Var(loc, ret)))), v]
         )
       | e -> [e]
@@ -228,7 +240,6 @@ module TailCall : S = struct
         let rec get_local_regs = function
           | [] -> []
           | (u, Assign (x, e), v)::xs -> 
-            let matcher = Str.regexp "\\$R[0-9]+" in
             if Str.string_match matcher x 0 then
               [x] @ get_local_regs xs
             else
@@ -254,5 +265,5 @@ module TailCall : S = struct
         edges @ [last, Skip, s]
       | e -> [e]
     in
-    map return_cleanup cfg |> SkipElim.transform |> map edge
+    SkipElim.transform cfg |> map return_cleanup |> SkipElim.transform |> map edge
 end
