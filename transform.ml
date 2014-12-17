@@ -211,8 +211,48 @@ end
 
 module TailCall : S = struct
   let transform cfg = if Config.no_fun then cfg else
-    let edge = function
-      | _ -> ?? "Exercise 9.2"
+    let return_cleanup = function
+      | u, (Assign (x, Lval(Var(loc, ret)))), v -> 
+        (
+        match out_edges v cfg |> Set.to_list with
+          | [v, (Assign (ret, Lval(Var(_, x)))), w] when Set.mem w (FunNodes.end_nodes ()) ->
+            [u, Skip, w]
+          | _ -> [u, (Assign (x, Lval(Var(loc, ret)))), v]
+        )
+      | e -> [e]
     in
-    SkipElim.transform cfg |> map edge
+    
+    let edge = function
+      | u, Call(f, args), v when Set.mem v (FunNodes.end_nodes ()) ->
+        
+        let rec get_local_regs = function
+          | [] -> []
+          | (u, Assign (x, e), v)::xs -> 
+            let matcher = Str.regexp "\\$R[0-9]+" in
+            if Str.string_match matcher x 0 then
+              [x] @ get_local_regs xs
+            else
+              get_local_regs xs
+          | e::xs -> get_local_regs xs
+        in
+        
+        let get_locals f cfg =
+          let edges = fun_edges f cfg in
+          get_local_regs (Set.to_list edges)
+        in
+        
+        let rec set_zero start : string list -> (Cfg.node * Cfg.edge list) = function
+          | [] -> start, []
+          | name::xs ->
+            let n = nn() in
+            let edges = [start, Assign (name, Val(0)), n] in
+            let last, nedges = set_zero n xs in
+            last, nedges @ edges
+        
+        in let (last, edges) = set_zero u (get_locals f cfg) in
+        let s = FunNodes.start_of f in
+        edges @ [last, Skip, s]
+      | e -> [e]
+    in
+    map return_cleanup cfg |> SkipElim.transform |> map edge
 end
