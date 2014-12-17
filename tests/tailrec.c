@@ -1,15 +1,11 @@
-int i = 10;
-int a = 1;
-
-void f(){
+int f(int i){
   if(i > 0){
-    a += i*i;
-    i--;
-    f();
+    return f(i--);
   }
+  return 5;
 }
 
 int main(){
-  f();
-  return a;
+  f(20);
+  return 5;
 }
