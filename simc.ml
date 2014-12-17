@@ -185,7 +185,7 @@ end = struct
     | Var(None, n) -> 
       (
       match Map.find n m with
-        | None -> ?? "Variable used before declaration"
+        | None -> ?? ("Variable used before declaration: " ^ n)
         | l -> Var(l, n)
       )
     | Deref(e) -> Deref(expr m e)
